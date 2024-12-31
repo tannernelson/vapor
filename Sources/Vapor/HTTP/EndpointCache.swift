@@ -33,7 +33,7 @@ public final class EndpointCache<T>: Sendable where T: Decodable & Sendable {
     ///   - request: The `Request` which is initiating the download.
     ///   - logger: An optional logger
     public func get(on request: Request, logger: Logger? = nil) -> EventLoopFuture<T> {
-        return self.download(on: request.eventLoop, using: request.client, logger: logger ?? request.logger)
+        return self.get(using: request.client, logger: logger ?? request.logger, on: request.eventLoop)
     }
 
     /// Downloads the resource.
