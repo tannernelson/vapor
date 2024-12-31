@@ -492,7 +492,7 @@ private final class HTTPServerConnection: Sendable {
         case .hostname:
             channel = bootstrap.bind(host: configuration.hostname, port: configuration.port)
         case .unixDomainSocket(let socketPath):
-            channel = bootstrap.bind(unixDomainSocketPath: socketPath)
+            channel = bootstrap.bind(unixDomainSocketPath: socketPath, cleanupExistingSocketFile: true)
         }
         
         return channel.map { channel in
