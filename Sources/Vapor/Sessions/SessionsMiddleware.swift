@@ -73,7 +73,7 @@ public final class SessionsMiddleware: Middleware {
             }
 
             // After create or update, set cookie on the response.
-            response.cookies[self.configuration.cookieName] = self.configuration.cookieFactory(sessionID)
+            response.cookies[self.configuration.cookieName] = self.configuration.cookieFactory(sessionID, session)
             return response
         } else if let cookieValue = request.cookies[self.configuration.cookieName] {
             // The request had a session cookie, but now there is no valid session.

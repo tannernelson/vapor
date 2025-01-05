@@ -3,7 +3,7 @@ import Foundation
 /// Configuration options for sessions.
 public struct SessionsConfiguration: Sendable {
     /// Creates a new `HTTPCookieValue` for the supplied value `String`.
-    public var cookieFactory: @Sendable (SessionID) -> HTTPCookies.Value
+    public var cookieFactory: @Sendable (SessionID, Session) -> HTTPCookies.Value
 
     /// Name of HTTP cookie, used as a key for the cookie value.
     public var cookieName: String
@@ -17,14 +17,14 @@ public struct SessionsConfiguration: Sendable {
     /// - parameters:
     ///     - cookieName: Name of HTTP cookie, used as a key for the cookie value.
     ///     - cookieFactory: Creates a new `HTTPCookieValue` for the supplied value `String`.
-    public init(cookieName: String, cookieFactory: @Sendable @escaping (SessionID) -> HTTPCookies.Value) {
+    public init(cookieName: String, cookieFactory: @Sendable @escaping (SessionID, Session) -> HTTPCookies.Value) {
         self.cookieName = cookieName
         self.cookieFactory = cookieFactory
     }
 
     /// `SessionsConfig` with basic cookie factory.
     public static func `default`() -> SessionsConfiguration {
-        return .init(cookieName: "vapor-session") { sessionID in
+        return .init(cookieName: "vapor-session") { sessionID, _ in
             return HTTPCookies.Value(
                 string: sessionID.string,
                 expires: Date(

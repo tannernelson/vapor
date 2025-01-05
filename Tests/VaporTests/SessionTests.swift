@@ -145,4 +145,48 @@ final class SessionTests: XCTestCase {
         headers.replaceOrAdd(name: .cookie, value: #"foo= "+cookie/value" "#)
         XCTAssertEqual(headers.cookie?["foo"]?.string, "+cookie/value")
     }
+
+    func testSessionCookieValueBasedOnSessionData() async throws {
+        // Configure sessions.
+        var config = SessionsConfiguration.default()
+        config.cookieFactory = { sessionID, session in
+            let rememberMe = Bool(session.data["rememberMe"] ?? "")
+            let time: TimeInterval = (rememberMe ?? false) ? 7 * 24 * 60 * 60 : 24 * 60 * 60
+            let expiresAt = Date().addingTimeInterval(time)
+            return .init(string: sessionID.string, expires: expiresAt)
+        }
+
+        app.sessions.use(.memory)
+        app.middleware.use(SessionsMiddleware(session: app.sessions.driver, configuration: config))
+
+        app.get("rememberMe") { req -> HTTPStatus in
+            req.session.data["rememberMe"] = String(true)
+            return .ok
+        }
+
+        app.get("dontRememberMe") { req -> HTTPStatus in
+            req.session.data["rememberMe"] = String(false)
+            return .ok
+        }
+
+        try await app.testable().test(.GET, "dontRememberMe", afterResponse: { res async throws -> Void in
+            let cookie = res.headers.setCookie?["vapor-session"]
+            XCTAssertNotNil(cookie)
+
+            let expiresTimeInterval = cookie?.expires?.timeIntervalSinceNow
+            let expectedTimeInterval = Date().timeIntervalSinceNow + 24 * 60 * 60
+            XCTAssertNotNil(expiresTimeInterval)
+            XCTAssertEqual(expiresTimeInterval ?? 0, expectedTimeInterval, accuracy: 60)
+        })
+
+        try await app.testable().test(.GET, "rememberMe", afterResponse: { res async throws -> Void in
+            let cookie = res.headers.setCookie?["vapor-session"]
+            XCTAssertNotNil(cookie)
+
+            let expiresTimeInterval = cookie?.expires?.timeIntervalSinceNow
+            let expectedTimeInterval = Date().timeIntervalSinceNow + 7 * 24 * 60 * 60
+            XCTAssertNotNil(expiresTimeInterval)
+            XCTAssertEqual(expiresTimeInterval ?? 0, expectedTimeInterval, accuracy: 60)
+        })
+    }
 }
