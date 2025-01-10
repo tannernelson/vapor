@@ -365,6 +365,16 @@ final class HTTPHeaderTests: XCTestCase {
         )
     }
     
+    func testRangeLimit() throws {
+        let contentRanges = HTTPHeaders.Range(unit: .bytes, ranges: [
+            .within(start: 200, end: 1000)
+        ])
+
+        let firstRange = contentRanges.ranges.first
+        let accept = try firstRange!.asResponseContentRange(limit: 600)
+        XCTAssertEqual(accept.serialize(), "200-600/600")
+    }
+    
     func testLinkHeaderParsing() throws {
         let headers = HTTPHeaders([
             ("link", #"<https://localhost/?a=1>; rel="next", <https://localhost/?a=2>; rel="last"; custom1="whatever", </?a=-1>; rel=related, </?a=-2>; rel=related"#)
