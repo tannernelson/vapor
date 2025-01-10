@@ -4,7 +4,6 @@ import Vapor
 import NIOCore
 import Algorithms
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func XCTAssertURIComponents(
        scheme: @autoclosure () throws -> URI.Scheme?,
      userinfo: @autoclosure () throws -> String? = nil,
@@ -29,7 +28,6 @@ func XCTAssertURIComponents(
     )
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func XCTAssertURIComponents(
        scheme: @autoclosure () throws -> String? = nil,
      userinfo: @autoclosure () throws -> String? = nil,
@@ -69,7 +67,6 @@ func XCTAssertURIComponents(
     }
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func XCTAssertURIString(
      _ string: @autoclosure () throws -> String,
      hasScheme scheme:     @autoclosure () throws -> String? = nil,
@@ -104,7 +101,6 @@ func XCTAssertURIString(
     }
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 final class URITests: XCTestCase {
     func testBasicConstruction() {
         XCTAssertURIString(
@@ -228,15 +224,11 @@ final class URITests: XCTestCase {
         XCTAssertNil(uri.port)
         XCTAssertNil(uri.query)
         XCTAssertNil(uri.fragment)
-        if #available(macOS 14, iOS 17, watchOS 10, tvOS 17, *) {
-            // TODO: It is not clear why the "encode the first colon as %3A but none of the others" behavior appears, and why only on Darwin
-            XCTAssertEqual(
-                uri.path.replacingOccurrences(of: zeros, with: "00...00").replacing("%3A", with: ":", maxReplacements: 1),
-                readableInAssertionOutput.replacing("%3A", with: ":", maxReplacements: 1)
-            )
-        } else {
-            XCTAssertEqual(uri.path, "/")
-        }
+        // TODO: It is not clear why the "encode the first colon as %3A but none of the others" behavior appears, and why only on Darwin
+        XCTAssertEqual(
+            uri.path.replacingOccurrences(of: zeros, with: "00...00").replacing("%3A", with: ":", maxReplacements: 1),
+            readableInAssertionOutput.replacing("%3A", with: ":", maxReplacements: 1)
+        )
     }
     
     func testUrlParsingVectors() {

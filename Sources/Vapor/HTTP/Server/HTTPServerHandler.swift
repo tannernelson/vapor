@@ -19,7 +19,10 @@ final class HTTPServerHandler: ChannelInboundHandler, RemovableChannelHandler {
         let box = NIOLoopBound((context, self), eventLoop: context.eventLoop)
         let request = self.unwrapInboundIn(data)
         // hop(to:) is required here to ensure we're on the correct event loop
-        self.responder.respond(to: request).hop(to: context.eventLoop).whenComplete { response in
+        let responder = self.responder
+        context.eventLoop.makeFutureWithTask {
+            try await responder.respond(to: request)
+        }.hop(to: context.eventLoop).whenComplete { response in
             let (context, handler) = box.value
             handler.serialize(response, for: request, context: context)
         }

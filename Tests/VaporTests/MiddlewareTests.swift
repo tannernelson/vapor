@@ -9,11 +9,11 @@ final class MiddlewareTests: XCTestCase {
     
     override func setUp() async throws {
         let test = Environment(name: "testing", arguments: ["vapor"])
-        app = try await Application.make(test)
+        app = await Application(test)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     actor OrderStore {
@@ -35,12 +35,9 @@ final class MiddlewareTests: XCTestCase {
             self.pos = pos
             self.store = store
         }
-        func respond(to req: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
-            req.eventLoop.makeFutureWithTask {
-                await self.store.addOrder(self.pos)
-            }.flatMap {
-                next.respond(to: req)
-            }
+        func respond(to req: Request, chainingTo next: Responder) async throws -> Response {
+            await self.store.addOrder(self.pos)
+            return try await next.respond(to: req)
         }
     }
 
@@ -79,14 +76,14 @@ final class MiddlewareTests: XCTestCase {
         }
     }
 
-    func testCORSMiddlewareVariedByRequestOrigin() throws {
+    func testCORSMiddlewareVariedByRequestOrigin() async throws {
         app.grouped(
             CORSMiddleware(configuration: .init(allowedOrigin: .originBased, allowedMethods: [.GET], allowedHeaders: [.origin]))
         ).get("order") { req -> String in
             return "done"
         }
 
-        try app.testable().test(.GET, "/order", headers: ["Origin": "foo"]) { res in
+        try await app.testable().test(.GET, "/order", headers: ["Origin": "foo"]) { res in
             XCTAssertEqual(res.status, .ok)
             XCTAssertEqual(res.body.string, "done")
             XCTAssertEqual(res.headers[.vary], ["origin"])
@@ -95,14 +92,14 @@ final class MiddlewareTests: XCTestCase {
         }
     }
 
-    func testCORSMiddlewareNoVariationByRequestOriginAllowed() throws {
+    func testCORSMiddlewareNoVariationByRequestOriginAllowed() async throws {
         app.grouped(
             CORSMiddleware(configuration: .init(allowedOrigin: .none, allowedMethods: [.GET], allowedHeaders: []))
         ).get("order") { req -> String in
             return "done"
         }
 
-        try app.testable().test(.GET, "/order", headers: ["Origin": "foo"]) { res in
+        try await app.testable().test(.GET, "/order", headers: ["Origin": "foo"]) { res in
             XCTAssertEqual(res.status, .ok)
             XCTAssertEqual(res.body.string, "done")
             XCTAssertEqual(res.headers[.vary], [])

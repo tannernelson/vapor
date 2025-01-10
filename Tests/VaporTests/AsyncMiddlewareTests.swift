@@ -6,11 +6,11 @@ final class AsyncMiddlewareTests: XCTestCase {
     var app: Application!
     
     override func setUp() async throws {
-        app = try await Application.make(.testing)
+        app = await Application(.testing)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     actor OrderStore {
@@ -25,14 +25,14 @@ final class AsyncMiddlewareTests: XCTestCase {
         }
     }
     
-    final class OrderMiddleware: AsyncMiddleware {
+    final class OrderMiddleware: Middleware {
         let pos: String
         let store: OrderStore
         init(_ pos: String, store: OrderStore) {
             self.pos = pos
             self.store = store
         }
-        func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        func respond(to request: Request, chainingTo next: Responder) async throws -> Response {
             await store.addOrder(pos)
             return try await next.respond(to: request)
         }

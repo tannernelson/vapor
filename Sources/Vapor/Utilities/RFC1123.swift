@@ -1,4 +1,4 @@
-#if swift(>=5.10)
+#warning("TODO")
 #if canImport(Darwin)
 @preconcurrency import Darwin
 #elseif canImport(Glibc)
@@ -11,7 +11,6 @@ import Glibc
 @preconcurrency import Musl
 #elseif canImport(WinSDK)
 @preconcurrency import WinSDK
-#endif
 #endif
 import Foundation
 import NIOPosix

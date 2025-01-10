@@ -7,13 +7,13 @@ struct Entrypoint {
         var env = try Environment.detect()
         try LoggingSystem.bootstrap(from: &env)
 
-        let app = try await Application.make(env)
+        let app = await Application(env)
         do {
-            try configure(app)
-            try await app.execute()
-            try await app.asyncShutdown()
+            try await configure(app)
+            try await app.start()
+            try await app.shutdown()
         } catch {
-            try? await app.asyncShutdown()
+            try? await app.shutdown()
             throw error
         }
     }

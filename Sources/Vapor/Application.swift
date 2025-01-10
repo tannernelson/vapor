@@ -104,8 +104,6 @@ public final class Application: Sendable {
     
     public enum EventLoopGroupProvider: Sendable {
         case shared(EventLoopGroup)
-        @available(*, deprecated, renamed: "singleton", message: "Use '.singleton' for a shared 'EventLoopGroup', for better performance")
-        case createNew
         
         public static var singleton: EventLoopGroupProvider {
             .shared(MultiThreadedEventLoopGroup.singleton)
@@ -123,25 +121,24 @@ public final class Application: Sendable {
     private let _lifecycle: NIOLockedValueBox<Lifecycle>
     private let _locks: NIOLockedValueBox<Locks>
     
-    @available(*, noasync, message: "This initialiser cannot be used in async contexts, use Application.make(_:_:) instead")
-    public convenience init(
-        _ environment: Environment = .development,
-        _ eventLoopGroupProvider: EventLoopGroupProvider = .singleton
-    ) {
-        self.init(environment, eventLoopGroupProvider, async: false)
-        self.asyncCommands.use(self.servers.command, as: "serve", isDefault: true)
-        DotEnvFile.load(for: environment, on: .shared(self.eventLoopGroup), fileio: self.fileio, logger: self.logger)
-    }
+    // New service stuff
+    public let cache: Cache
+    public let passwordHasher: AsyncPasswordHasher
     
-    // async flag here is just to stop the compiler from complaining about duplicates
-    private init(_ environment: Environment = .development, _ eventLoopGroupProvider: EventLoopGroupProvider = .singleton, async: Bool) {
+    public init(
+        _ environment: Environment = .development,
+        _ eventLoopGroupProvider: EventLoopGroupProvider = .singleton,
+        
+        // Override services here
+        cache: Cache = MemoryCache(),
+        passwordHasher: PasswordHasher = BcryptHasher(cost: 12)
+    
+    ) async {
         self._environment = .init(environment)
         self.eventLoopGroupProvider = eventLoopGroupProvider
         switch eventLoopGroupProvider {
         case .shared(let group):
             self.eventLoopGroup = group
-        case .createNew:
-            self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         }
         self._locks = .init(.init())
         self._didShutdown = .init(false)
@@ -151,72 +148,41 @@ public final class Application: Sendable {
         self._storage = .init(.init(logger: logger))
         self._lifecycle = .init(.init())
         self.isBooted = .init(false)
-        self.core.initialize(asyncEnvironment: async)
-        self.caches.initialize()
-        self.views.initialize()
-        self.passwords.use(.bcrypt)
+        
+        // Services
+        self.cache = cache
+#warning("Fix thread pool")
+        self.passwordHasher = .init(hasher: passwordHasher, threadPool: NIOThreadPool(numberOfThreads: 12), eventLoop: self.eventLoopGroup.any())
+        
+        await self.core.initialize()
+        await self.views.initialize()
         self.sessions.initialize()
         self.sessions.use(.memory)
-        self.responder.initialize()
+        await self.responder.initialize()
         self.responder.use(.default)
         self.servers.initialize()
         self.servers.use(.http)
-        self.clients.initialize()
+        await self.clients.initialize()
         self.clients.use(.http)
-        self.asyncCommands.use(RoutesCommand(), as: "routes")
+        self.commands.use(RoutesCommand(), as: "routes")
+        self.commands.use(self.servers.command, as: "serve", isDefault: true)
+        
+        await DotEnvFile.load(for: environment, logger: self.logger)
     }
     
-    public static func make(_ environment: Environment = .development, _ eventLoopGroupProvider: EventLoopGroupProvider = .singleton) async throws -> Application {
-        let app = Application(environment, eventLoopGroupProvider, async: true)
-        await app.asyncCommands.use(app.servers.asyncCommand, as: "serve", isDefault: true)
-        await DotEnvFile.load(for: app.environment, fileio: app.fileio, logger: app.logger)
-        return app
-    }
-
-    /// Starts the ``Application`` using the ``start()`` method, then waits for any running tasks to complete.
-    /// If your application is started without arguments, the default argument is used.
-    ///
-    /// Under normal circumstances, ``run()`` runs until a shutdown is triggered, then waits for the web server to
-    /// (manually) shut down before returning.
-    ///
-    /// > Warning: You should probably be using ``execute()`` instead of this method.
-    @available(*, noasync, message: "Use the async execute() method instead.")
-    public func run() throws {
-        do {
-            try self.start()
-            try self.running?.onStop.wait()
-        } catch {
-            self.logger.report(error: error)
-            throw error
-        }
-    }
-    
-    /// Starts the ``Application`` asynchronous using the ``startup()`` method, then waits for any running tasks
+    /// Starts the ``Application`` using the ``start()`` method, then waits for any running tasks
     /// to complete. If your application is started without arguments, the default argument is used.
     ///
-    /// Under normal circumstances, ``execute()`` runs until a shutdown is triggered, then wait for the web server to
+    /// Under normal circumstances, ``run()`` runs until a shutdown is triggered, then wait for the web server to
     /// (manually) shut down before returning.
-    public func execute() async throws {
+    public func run() async throws {
         do {
-            try await self.startup()
+            try await self.start()
             try await self.running?.onStop.get()
         } catch {
             self.logger.report(error: error)
             throw error
         }
-    }
-
-    /// When called, this will execute the startup command provided through an argument. If no startup command is
-    /// provided, the default is used. Under normal circumstances, this will start running Vapor's webserver.
-    ///
-    /// If you start Vapor through this method, you'll need to prevent your Swift Executable from closing yourself.
-    /// If you want to run your ``Application`` indefinitely, or until your code shuts the application down,
-    /// use ``run()`` instead.
-    ///
-    /// > Warning: You should probably be using ``startup()`` instead of this method.
-    @available(*, noasync, message: "Use the async startup() method instead.")
-    public func start() throws {
-        try self.eventLoopGroup.any().makeFutureWithTask { try await self.startup() }.wait()
     }
     
     /// When called, this will asynchronously execute the startup command provided through an argument. If no startup
@@ -224,37 +190,16 @@ public final class Application: Sendable {
     ///
     /// If you start Vapor through this method, you'll need to prevent your Swift Executable from closing yourself.
     /// If you want to run your ``Application`` indefinitely, or until your code shuts the application down,
-    /// use ``execute()`` instead.
-    public func startup() async throws {
-        try await self.asyncBoot()
-
-        let combinedCommands = AsyncCommands(
-            commands: self.asyncCommands.commands.merging(self.commands.commands) { $1 },
-            defaultCommand: self.asyncCommands.defaultCommand ?? self.commands.defaultCommand,
-            enableAutocomplete: self.asyncCommands.enableAutocomplete || self.commands.enableAutocomplete
-        ).group()
-
+    /// use ``run()`` instead.
+    public func start() async throws {
+        try await self.boot()
         var context = CommandContext(console: self.console, input: self.environment.commandInput)
         context.application = self
-        try await self.console.run(combinedCommands, with: context)
-    }
-
-    
-    @available(*, noasync, message: "This can potentially block the thread and should not be called in an async context", renamed: "asyncBoot()")
-    /// Called when the applications starts up, will trigger the lifecycle handlers
-    public func boot() throws {
-        try self.isBooted.withLockedValue { booted in
-            guard !booted else {
-                return
-            }
-            booted = true
-            try self.lifecycle.handlers.forEach { try $0.willBoot(self) }
-            try self.lifecycle.handlers.forEach { try $0.didBoot(self) }
-        }
+        try await self.console.run(self.commands.group(), with: context)
     }
     
     /// Called when the applications starts up, will trigger the lifecycle handlers. The asynchronous version of ``boot()``
-    public func asyncBoot() async throws {
+    public func boot() async throws {
         /// Skip the boot process if already booted
         guard !self.isBooted.withLockedValue({
             var result = true
@@ -265,66 +210,30 @@ public final class Application: Sendable {
         }
 
         for handler in self.lifecycle.handlers {
-            try await handler.willBootAsync(self)
+            try await handler.willBoot(self)
         }
         for handler in self.lifecycle.handlers {
-            try await handler.didBootAsync(self)
+            try await handler.didBoot(self)
         }
-    }
-
-    @available(*, noasync, message: "This can block the thread and should not be called in an async context", renamed: "asyncShutdown()")
-    public func shutdown() {
-        assert(!self.didShutdown, "Application has already shut down")
-        self.logger.debug("Application shutting down")
-
-        self.logger.trace("Shutting down providers")
-        self.lifecycle.handlers.reversed().forEach { $0.shutdown(self) }
-        self.lifecycle.handlers = []
-
-        self.logger.trace("Clearing Application storage")
-        self.storage.shutdown()
-        self.storage.clear()
-
-        switch self.eventLoopGroupProvider {
-        case .shared:
-            self.logger.trace("Running on shared EventLoopGroup. Not shutting down EventLoopGroup.")
-        case .createNew:
-            self.logger.trace("Shutting down EventLoopGroup")
-            do {
-                try self.eventLoopGroup.syncShutdownGracefully()
-            } catch {
-                self.logger.warning("Shutting down EventLoopGroup failed: \(error)")
-            }
-        }
-
-        self._didShutdown.withLockedValue { $0 = true }
-        self.logger.trace("Application shutdown complete")
     }
     
-    public func asyncShutdown() async throws {
+    public func shutdown() async throws {
         assert(!self.didShutdown, "Application has already shut down")
         self.logger.debug("Application shutting down")
 
         self.logger.trace("Shutting down providers")
         for handler in self.lifecycle.handlers.reversed()  {
-            await handler.shutdownAsync(self)
+            await handler.shutdown(self)
         }
         self.lifecycle.handlers = []
 
         self.logger.trace("Clearing Application storage")
-        await self.storage.asyncShutdown()
+        await self.storage.shutdown()
         self.storage.clear()
 
         switch self.eventLoopGroupProvider {
         case .shared:
             self.logger.trace("Running on shared EventLoopGroup. Not shutting down EventLoopGroup.")
-        case .createNew:
-            self.logger.trace("Shutting down EventLoopGroup")
-            do {
-                try await self.eventLoopGroup.shutdownGracefully()
-            } catch {
-                self.logger.warning("Shutting down EventLoopGroup failed: \(error)")
-            }
         }
 
         self._didShutdown.withLockedValue { $0 = true }
@@ -335,7 +244,7 @@ public final class Application: Sendable {
         self.logger.trace("Application deinitialized, goodbye!")
         if !self.didShutdown {
             self.logger.error("Application.shutdown() was not called before Application deinitialized.")
-            self.shutdown()
+            assert(!self.didShutdown, "Call shutdown() before deinitializing")
         }
     }
 }

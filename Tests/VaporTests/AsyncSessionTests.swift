@@ -8,15 +8,15 @@ final class AsyncSessionTests: XCTestCase {
     
     override func setUp() async throws {
         let test = Environment(name: "testing", arguments: ["vapor"])
-        app = try await Application.make(test)
+        app = await Application(test)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testSessionDestroy() async throws {
-        actor MockKeyedCache: AsyncSessionDriver {
+        actor MockKeyedCache: SessionDriver {
             var ops: [String] = []
             init() { }
 
@@ -55,11 +55,11 @@ final class AsyncSessionTests: XCTestCase {
         app.sessions.use { _ in cache }
         let sessions = app.routes.grouped(app.sessions.middleware)
         sessions.get("set") { req -> String in
-            req.session.data["foo"] = "bar"
+            await req.session.set("foo", to: "bar")
             return "set"
         }
         sessions.get("del") { req  -> String in
-            req.session.destroy()
+            await req.session.destroy()
             return "del"
         }
 
@@ -97,13 +97,13 @@ final class AsyncSessionTests: XCTestCase {
 
         // Adds data to the request session.
         app.get("set") { req -> HTTPStatus in
-            req.session.data["foo"] = "bar"
+            await req.session.set("foo", to: "bar")
             return .ok
         }
 
         // Fetches data from the request session.
         app.get("get") { req -> String in
-            guard let foo = req.session.data["foo"] else {
+            guard let foo = await req.session.data["foo"] else {
                 throw Abort(.badRequest)
             }
             return foo

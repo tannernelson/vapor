@@ -66,9 +66,8 @@ final class ErrorTests: XCTestCase {
         XCTAssertEqual(description, expectation)
     }
 
-    func testAbortError() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
+    func testAbortError() async throws {
+        let app = await Application(.testing)
 
         app.get("foo") { req -> String in
             throw Abort(.internalServerError, reason: "Foo")
@@ -82,7 +81,7 @@ final class ErrorTests: XCTestCase {
             var reason: String
         }
 
-        try app.test(.GET, "foo") { res in
+        try await app.test(.GET, "foo") { res in
             XCTAssertEqual(res.status, .internalServerError)
             let abort = try res.content.decode(AbortResponse.self)
             XCTAssertEqual(abort.reason, "Foo")
@@ -93,11 +92,12 @@ final class ErrorTests: XCTestCase {
             let abort = try res.content.decode(AbortResponse.self)
             XCTAssertEqual(abort.reason, "After decode")
         })
+        
+        try await app.shutdown()
     }
     
-    func testErrorMiddlewareUsesContentConfiguration() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
+    func testErrorMiddlewareUsesContentConfiguration() async throws {
+        let app = await Application(.testing)
         
         app.get("foo") { req -> String in
             throw Abort(.internalServerError, reason: "Foo")
@@ -105,7 +105,7 @@ final class ErrorTests: XCTestCase {
         
         ContentConfiguration.global.use(encoder: URLEncodedFormEncoder(), for: .json)
         
-        try app.test(.GET, "foo") { res in
+        try await app.test(.GET, "foo") { res in
             XCTAssertEqual(res.status, HTTPStatus.internalServerError)
             let option1 = "error=true&reason=Foo"
             let option2 = "reason=Foo&error=true"
@@ -117,6 +117,8 @@ final class ErrorTests: XCTestCase {
         
         // Clean up
         ContentConfiguration.global.use(encoder: JSONEncoder(), for: .json)
+        
+        try await app.shutdown()
     }
 }
 

@@ -17,7 +17,7 @@ public struct SessionsConfiguration: Sendable {
     /// - parameters:
     ///     - cookieName: Name of HTTP cookie, used as a key for the cookie value.
     ///     - cookieFactory: Creates a new `HTTPCookieValue` for the supplied value `String`.
-    @preconcurrency public init(cookieName: String, cookieFactory: @Sendable @escaping (SessionID) -> HTTPCookies.Value) {
+    public init(cookieName: String, cookieFactory: @Sendable @escaping (SessionID) -> HTTPCookies.Value) {
         self.cookieName = cookieName
         self.cookieFactory = cookieFactory
     }

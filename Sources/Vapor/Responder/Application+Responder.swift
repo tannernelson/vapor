@@ -16,7 +16,7 @@ extension Application {
 
             let run: @Sendable (Application) -> ()
 
-            @preconcurrency public init(_ run: @Sendable @escaping (Application) -> ()) {
+            public init(_ run: @Sendable @escaping (Application) -> ()) {
                 self.run = run
             }
         }
@@ -38,25 +38,29 @@ extension Application {
         public let application: Application
 
         public var current: Vapor.Responder {
-            guard let factory = self.storage.factory.withLockedValue({ $0.factory }) else {
-                fatalError("No responder configured. Configure with app.responder.use(...)")
+            get {
+                guard let factory = self.storage.factory.withLockedValue({ $0.factory }) else {
+                    fatalError("No responder configured. Configure with app.responder.use(...)")
+                }
+                return factory(self.application)
             }
-            return factory(self.application)
         }
 
         public var `default`: Vapor.Responder {
-            DefaultResponder(
-                routes: self.application.routes,
-                middleware: self.application.middleware.resolve(),
-                reportMetrics: self.application.http.server.configuration.reportMetrics
-            )
+            get {
+                DefaultResponder(
+                    routes: self.application.routes,
+                    middleware: self.application.middleware.resolve(),
+                    reportMetrics: self.application.http.server.configuration.reportMetrics
+                )
+            }
         }
 
         public func use(_ provider: Provider) {
             provider.run(self.application)
         }
 
-        @preconcurrency public func use(_ factory: @Sendable @escaping (Application) -> (Vapor.Responder)) {
+        public func use(_ factory: @Sendable @escaping (Application) -> (Vapor.Responder)) {
             self.storage.factory.withLockedValue { $0 = .init(factory: factory) }
         }
 
@@ -67,14 +71,14 @@ extension Application {
             return storage
         }
 
-        func initialize() {
-            self.application.storage[Key.self] = .init()
+        func initialize() async {
+            await self.application.storage.set(Key.self, to: .init())
         }
     }
 }
 
 extension Application.Responder: Responder {
-    public func respond(to request: Request) -> EventLoopFuture<Response> {
-        self.current.respond(to: request)
+    public func respond(to request: Request) async throws -> Response {
+        try await self.current.respond(to: request)
     }
 }

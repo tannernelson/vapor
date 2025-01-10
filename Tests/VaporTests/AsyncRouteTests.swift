@@ -7,15 +7,15 @@ final class AsyncRouteTests: XCTestCase {
     var app: Application!
     
     override func setUp() async throws {
-        app = try await Application.make(.testing)
+        app = await Application(.testing)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testEnumResponse() async throws {
-        enum IntOrString: AsyncResponseEncodable {
+        enum IntOrString: ResponseEncodable {
             case int(Int)
             case string(String)
 

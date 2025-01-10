@@ -6,46 +6,34 @@ import NIOConcurrencyHelpers
 /// to your app. This is usually done via HTTP cookies.
 ///
 /// See `Request.session()` and `SessionsMiddleware` for more information.
-public final class Session: Sendable {
+public actor Session: Sendable {
     /// This session's unique identifier. Usually a cookie value.
-    public var id: SessionID? {
-        get {
-            self._id.withLockedValue { $0 }
-        }
-        set {
-            self._id.withLockedValue { $0 = newValue }
-        }
-    }
+    public var id: SessionID?
 
     /// This session's data.
-    public var data: SessionData {
-        get {
-            self._data.withLockedValue { $0 }
-        }
-        set {
-            self._data.withLockedValue { $0 = newValue }
-        }
-    }
+    public var data: SessionData
 
     /// `true` if this session is still valid.
-    let isValid: NIOLockedValueBox<Bool>
+    var isValid: Bool
     
-    private let _id: NIOLockedValueBox<SessionID?>
-    private let _data: NIOLockedValueBox<SessionData>
-
     /// Create a new `Session`.
     ///
     /// Normally you will use `Request.session()` to do this.
     public init(id: SessionID? = nil, data: SessionData = .init()) {
-        self._id = .init(id)
-        self._data = .init(data)
+        self.id = id
+        self.data = data
         self.isValid = .init(true)
     }
 
     /// Invalidates the current session, removing persisted data from the session driver
     /// and invalidating the cookie.
     public func destroy() {
-        self.isValid.withLockedValue { $0 = false }
+        self.isValid = false
+    }
+    
+#warning("There must be a better way to do this")
+    public func set(_ key: String, to value: String?) {
+        self.data[key] = value
     }
 }
 

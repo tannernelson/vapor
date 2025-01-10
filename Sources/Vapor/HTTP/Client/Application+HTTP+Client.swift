@@ -28,7 +28,7 @@ extension Application.HTTP {
                     configuration: self.configuration,
                     backgroundActivityLogger: self.application.logger
                 )
-                self.application.storage.setFirstTime(Key.self, to: new, onShutdown: { try $0.syncShutdown() }) {
+                self.application.storage.setFirstTime(Key.self, to: new) {
                     try await $0.shutdown()
                 }
                 return new
@@ -39,12 +39,13 @@ extension Application.HTTP {
             get {
                 self.application.storage[ConfigurationKey.self] ?? .init()
             }
-            nonmutating set {
-                if self.application.storage.contains(Key.self) {
-                    self.application.logger.warning("Cannot modify client configuration after client has been used.")
-                } else {
-                    self.application.storage[ConfigurationKey.self] = newValue
-                }
+        }
+        
+        public func updateConfiguration(with newConfig: HTTPClient.Configuration) async {
+            if self.application.storage.contains(Key.self) {
+                self.application.logger.warning("Cannot modify client configuration after client has been used.")
+            } else {
+                await self.application.storage.set(ConfigurationKey.self, to: newConfig)
             }
         }
 

@@ -211,6 +211,5 @@ extension HTTPHeaders {
     }
 }
 
-#if !$InferSendableFromCaptures
+#warning("Sort out")
 extension Swift.WritableKeyPath: @unchecked Swift.Sendable {}
-#endif

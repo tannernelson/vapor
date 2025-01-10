@@ -2,17 +2,21 @@ import Vapor
 import NIOConcurrencyHelpers
 import NIOSSL
 
-public func configure(_ app: Application) throws {
+public func configure(_ app: Application) async throws {
     app.logger.logLevel = Environment.process.LOG_LEVEL ?? .debug
     
-    app.http.server.configuration.hostname = "127.0.0.1"
+#warning("Sort")
+    var config = app.http.server.configuration
+    config.hostname = "127.0.0.1"
     if app.environment == .tls {
-        app.http.server.configuration.port = 8443
-        try app.http.server.configuration.tlsConfiguration = .makeServerConfiguration(
+        config.port = 8443
+        try config.tlsConfiguration = .makeServerConfiguration(
             certificateChain: NIOSSLCertificate.fromPEMBytes(TLSData.sampleServerCertificatePEM).map { .certificate($0) },
             privateKey: .privateKey(.init(bytes: TLSData.sampleServerPrivateKeyPEM, format: .pem))
         )
     }
+    
+    await app.http.server.shared.updateConfiguration(config)
     
     // routes
     try routes(app)

@@ -31,10 +31,10 @@ public final class ServeCommand: AsyncCommand, Sendable {
         case incompatibleFlags
     }
 
-    // See `AsyncCommand`.
+    // See `Command`.
     public let signature = Signature()
 
-    // See `AsyncCommand`.
+    // See `Command`.
     public var help: String {
         return "Begins serving the app over HTTP."
     }
@@ -54,7 +54,7 @@ public final class ServeCommand: AsyncCommand, Sendable {
         self.box = .init(box)
     }
 
-    // See `AsyncCommand`.
+    // See `Command`.
     public func run(using context: CommandContext, signature: Signature) async throws {
         switch (signature.hostname, signature.port, signature.bind, signature.socketPath) {
         case (.none, .none, .none, .none): // use defaults
@@ -103,21 +103,8 @@ public final class ServeCommand: AsyncCommand, Sendable {
         makeSignalSource(SIGINT)
         self.box.withLockedValue { $0 = box }
     }
-
-    @available(*, noasync, message: "Use the async asyncShutdown() method instead.")
-    func shutdown() {
-        var box = self.box.withLockedValue { $0 }
-        box.didShutdown = true
-        box.running?.stop()
-        if let server = box.server {
-            server.shutdown()
-        }
-        box.signalSources.forEach { $0.cancel() } // clear refs
-        box.signalSources = []
-        self.box.withLockedValue { $0 = box }
-    }
     
-    func asyncShutdown() async {
+    func shutdown() async {
         var box = self.box.withLockedValue { $0 }
         box.didShutdown = true
         box.running?.stop()

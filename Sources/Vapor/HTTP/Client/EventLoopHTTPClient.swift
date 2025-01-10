@@ -22,36 +22,32 @@ private struct EventLoopHTTPClient: Client {
 
     func send(
         _ client: ClientRequest
-    ) -> EventLoopFuture<ClientResponse> {
+    ) async throws -> ClientResponse {
         let urlString = client.url.string
         guard let url = URL(string: urlString) else {
             self.logger?.debug("\(urlString) is an invalid URL")
-            return self.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "\(urlString) is an invalid URL"))
+            throw Abort(.internalServerError, reason: "\(urlString) is an invalid URL")
         }
-        do {
-            let request = try HTTPClient.Request(
-                url: url,
-                method: client.method,
-                headers: client.headers,
-                body: client.body.map { .byteBuffer($0) }
+        let request = try HTTPClient.Request(
+            url: url,
+            method: client.method,
+            headers: client.headers,
+            body: client.body.map { .byteBuffer($0) }
+        )
+        return try await self.http.execute(
+            request: request,
+            eventLoop: .delegate(on: self.eventLoop),
+            deadline: client.timeout.map { .now() + $0 },
+            logger: logger
+        ).map { response in
+            let client = ClientResponse(
+                status: response.status,
+                headers: response.headers,
+                body: response.body,
+                byteBufferAllocator: self.byteBufferAllocator
             )
-            return self.http.execute(
-                request: request,
-                eventLoop: .delegate(on: self.eventLoop),
-                deadline: client.timeout.map { .now() + $0 },
-                logger: logger
-            ).map { response in
-                let client = ClientResponse(
-                    status: response.status,
-                    headers: response.headers,
-                    body: response.body,
-                    byteBufferAllocator: self.byteBufferAllocator
-                )
-                return client
-            }
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
+            return client
+        }.get()
     }
 
     func delegating(to eventLoop: EventLoop) -> Client {

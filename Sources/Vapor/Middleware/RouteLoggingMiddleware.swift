@@ -10,8 +10,8 @@ public final class RouteLoggingMiddleware: Middleware {
         self.logLevel = logLevel
     }
     
-    public func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
+    public func respond(to request: Request, chainingTo next: any Responder) async throws -> Response {
         request.logger.log(level: self.logLevel, "\(request.method) \(request.url.path.removingPercentEncoding ?? request.url.path)")
-        return next.respond(to: request)
+        return try await next.respond(to: request)
     }
 }

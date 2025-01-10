@@ -9,15 +9,15 @@ final class SessionTests: XCTestCase {
     
     override func setUp() async throws {
         let test = Environment(name: "testing", arguments: ["vapor"])
-        app = try await Application.make(test)
+        app = await Application(test)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testSessionDestroy() async throws {
-        actor MockKeyedCache: AsyncSessionDriver {
+        actor MockKeyedCache: SessionDriver {
             var ops: [String] = []
             init() { }
 
@@ -56,11 +56,11 @@ final class SessionTests: XCTestCase {
         app.sessions.use { _ in cache }
         let sessions = app.routes.grouped(app.sessions.middleware)
         sessions.get("set") { req -> String in
-            req.session.data["foo"] = "bar"
+            await req.session.set("foo", to: "bar")
             return "set"
         }
         sessions.get("del") { req  -> String in
-            req.session.destroy()
+            await req.session.destroy()
             return "del"
         }
 
@@ -91,20 +91,20 @@ final class SessionTests: XCTestCase {
         }
     }
 
-    func testInvalidCookie() throws {
+    func testInvalidCookie() async throws {
         // Configure sessions.
         app.sessions.use(.memory)
         app.middleware.use(app.sessions.middleware)
 
         // Adds data to the request session.
         app.get("set") { req -> HTTPStatus in
-            req.session.data["foo"] = "bar"
+            await req.session.set("foo", to: "bar")
             return .ok
         }
 
         // Fetches data from the request session.
         app.get("get") { req -> String in
-            guard let foo = req.session.data["foo"] else {
+            guard let foo = await req.session.data["foo"] else {
                 throw Abort(.badRequest)
             }
             return foo
@@ -112,13 +112,13 @@ final class SessionTests: XCTestCase {
 
 
         // Test accessing session with no cookie.
-        try app.test(.GET, "get") { res in
+        try await app.test(.GET, "get") { res in
             XCTAssertEqual(res.status, .badRequest)
         }
 
         // Test setting session with invalid cookie.
         var newCookie: HTTPCookies.Value?
-        try app.test(.GET, "set", beforeRequest: { req in
+        try await app.test(.GET, "set", beforeRequest: { req in
             req.headers.cookie = ["vapor-session": "foo"]
         }, afterResponse: { res in
             // We should get a new cookie back.
@@ -130,7 +130,7 @@ final class SessionTests: XCTestCase {
         })
 
         // Test accessing newly created session.
-        try app.test(.GET, "get", beforeRequest: { req in
+        try await app.test(.GET, "get", beforeRequest: { req in
             // Pass cookie from previous request.
             req.headers.cookie = ["vapor-session": newCookie!]
         }, afterResponse: { res in

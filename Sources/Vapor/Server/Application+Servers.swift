@@ -16,7 +16,7 @@ extension Application {
         public struct Provider {
             let run: @Sendable (Application) -> ()
 
-            @preconcurrency public init(_ run: @Sendable @escaping (Application) -> ()) {
+            public init(_ run: @Sendable @escaping (Application) -> ()) {
                 self.run = run
             }
         }
@@ -40,38 +40,25 @@ extension Application {
         }
 
         func initialize() {
-            self.application.storage[Key.self] = .init()
+            self.application.storage.setFirstTime(Key.self, to: .init())
         }
 
         public func use(_ provider: Provider) {
             provider.run(self.application)
         }
 
-        @preconcurrency public func use(_ makeServer: @Sendable @escaping (Application) -> (Server)) {
+        public func use(_ makeServer: @Sendable @escaping (Application) -> (Server)) {
             self.storage.makeServer.withLockedValue { $0 = .init(factory: makeServer) }
         }
-
-        @available(*, noasync, renamed: "asyncCommand", message: "Use the async property instead.")
-        public var command: ServeCommand {
-            if let existing = self.application.storage.get(CommandKey.self) {
-                return existing
-            } else {
-                let new = ServeCommand()
-                self.application.storage.set(CommandKey.self, to: new) {
-                    $0.shutdown()
-                }
-                return new
-            }
-        }
         
-        public var asyncCommand: ServeCommand {
-            get async {
+        public var command: ServeCommand {
+            get {
                 if let existing = self.application.storage.get(CommandKey.self) {
                     return existing
                 } else {
                     let new = ServeCommand()
-                    await self.application.storage.setWithAsyncShutdown(CommandKey.self, to: new) {
-                        await $0.asyncShutdown()
+                    self.application.storage.setFirstTime(CommandKey.self, to: new) {
+                        await $0.shutdown()
                     }
                     return new
                 }

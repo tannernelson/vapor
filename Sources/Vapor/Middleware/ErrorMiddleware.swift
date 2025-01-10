@@ -71,19 +71,21 @@ public final class ErrorMiddleware: Middleware {
     }
 
     /// Error-handling closure.
-    private let closure: @Sendable (Request, Error) -> (Response)
+    private let closure: @Sendable (Request, Error) async -> (Response)
 
     /// Create a new `ErrorMiddleware`.
     ///
     /// - parameters:
     ///     - closure: Error-handling closure. Converts `Error` to `Response`.
-    @preconcurrency public init(_ closure: @Sendable @escaping (Request, Error) -> (Response)) {
+    public init(_ closure: @Sendable @escaping (Request, Error) async -> (Response)) {
         self.closure = closure
     }
     
-    public func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
-        next.respond(to: request).flatMapErrorThrowing { error in
-            self.closure(request, error)
+    public func respond(to request: Request, chainingTo next: any Responder) async throws -> Response {
+        do {
+            return try await next.respond(to: request)
+        } catch {
+            return await self.closure(request, error)
         }
     }
 }

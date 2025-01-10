@@ -15,7 +15,7 @@ extension Application {
 
             let run: @Sendable (Application) -> ()
 
-            @preconcurrency public init(_ run: @Sendable @escaping (Application) -> ()) {
+            public init(_ run: @Sendable @escaping (Application) -> ()) {
                 self.run = run
             }
         }
@@ -24,7 +24,7 @@ extension Application {
             struct SessionDriverFactory {
                 let factory: (@Sendable (Application) -> SessionDriver)?
             }
-            let memory: MemorySessions.Storage
+            let memory: MemorySessions
             let makeDriver: NIOLockedValueBox<SessionDriverFactory>
             let configuration: NIOLockedValueBox<SessionsConfiguration>
             init() {
@@ -64,14 +64,14 @@ extension Application {
         }
 
         public var memory: MemorySessions {
-            .init(storage: self.storage.memory)
+            .init()
         }
 
         public func use(_ provider: Provider) {
             provider.run(self.application)
         }
 
-        @preconcurrency public func use(_ makeDriver: @Sendable @escaping (Application) -> (SessionDriver)) {
+        public func use(_ makeDriver: @Sendable @escaping (Application) -> (SessionDriver)) {
             self.storage.makeDriver.withLockedValue { $0 = .init(factory: makeDriver) }
         }
 
@@ -83,7 +83,7 @@ extension Application {
         }
 
         func initialize() {
-            self.application.storage[Key.self] = .init()
+            self.application.storage.setFirstTime(Key.self, to: .init())
         }
     }
 }

@@ -13,8 +13,8 @@ struct ResponderClient: Client {
         self
     }
 
-    func send(_ request: ClientRequest) -> EventLoopFuture<ClientResponse> {
-        self.responder.respond(to: .init(
+    func send(_ request: ClientRequest) async throws -> ClientResponse {
+        let response = try await self.responder.respond(to: .init(
             application: self.application,
             method: request.method,
             url: request.url,
@@ -24,9 +24,8 @@ struct ResponderClient: Client {
             remoteAddress: nil,
             logger: application.logger,
             on: application.eventLoopGroup.next()
-        )).map { res in
-            ClientResponse(status: res.status, headers: res.headers, body: res.body.buffer)
-        }
+        ))
+        return ClientResponse(status: response.status, headers: response.headers, body: response.body.buffer)
     }
 }
 

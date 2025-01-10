@@ -54,10 +54,10 @@ public final class Route: CustomStringConvertible, Sendable {
         var responder: Responder
         var requestType: Any.Type
         var responseType: Any.Type
-        var userInfo: [AnySendableHashable: Sendable]
+        var userInfo: [String: Sendable]
     }
     
-    public var userInfo: [AnySendableHashable: Sendable] {
+    public var userInfo: [String: Sendable] {
         get {
             self.sendableBox.withLockedValue { $0.userInfo }
         }

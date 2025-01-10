@@ -5,6 +5,7 @@ import NIOCore
 import AsyncHTTPClient
 import Atomics
 import NIOConcurrencyHelpers
+import NIOPosix
 
 fileprivate extension String {
     static func randomDigits(length: Int = 999) -> String {
@@ -21,16 +22,18 @@ final class AsyncRequestTests: XCTestCase {
     var app: Application!
     
     override func setUp() async throws {
-        app = try await Application.make(.testing)
+        app = await Application(.testing)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testStreamingRequest() async throws {
-        app.http.server.configuration.hostname = "127.0.0.1"
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.hostname = "127.0.0.1"
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
         
         let testValue = String.randomDigits()
 
@@ -46,7 +49,7 @@ final class AsyncRequestTests: XCTestCase {
         }
 
         app.environment.arguments = ["serve"]
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,
@@ -66,8 +69,10 @@ final class AsyncRequestTests: XCTestCase {
     }
     
     func testStreamingRequestBodyCleansUp() async throws {
-        app.http.server.configuration.hostname = "127.0.0.1"
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.hostname = "127.0.0.1"
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
         
         let bytesTheServerRead = ManagedAtomic<Int>(0)
         
@@ -79,7 +84,7 @@ final class AsyncRequestTests: XCTestCase {
         }
         
         app.environment.arguments = ["serve"]
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,
@@ -103,8 +108,10 @@ final class AsyncRequestTests: XCTestCase {
     // TODO: Re-enable once it reliably works and doesn't cause issues with trying to shut the application down
     // This may require some work in Vapor
     func _testRequestBodyBackpressureWorksWithAsyncStreaming() async throws {
-        app.http.server.configuration.hostname = "127.0.0.1"
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.hostname = "127.0.0.1"
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
         
         let numberOfTimesTheServerGotOfferedBytes = ManagedAtomic<Int>(0)
         let bytesTheServerSaw = ManagedAtomic<Int>(0)
@@ -140,7 +147,7 @@ final class AsyncRequestTests: XCTestCase {
         }
         
         app.environment.arguments = ["serve"]
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,

@@ -1,8 +1,4 @@
-#if os(Linux) && compiler(<6.0)
-@preconcurrency import Foundation
-#else
 import Foundation
-#endif
 
 extension Validator where T == String {
     /// Validates that all characters in a `String` are ASCII (bytes 0..<128).

@@ -4,53 +4,56 @@ import Vapor
 import NIOCore
 
 final class ServiceTests: XCTestCase {
-    func testReadOnly() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
+    
+    var app: Application!
+    
+    override func setUp() async throws {
+        self.app = await Application(.testing)
+    }
+    
+    override func tearDown() async throws {
+        try await self.app.shutdown()
+    }
+    
+    func testReadOnly() async throws {
         app.get("test") { req in
-            req.readOnly.foos()
+            await req.readOnly.foos()
         }
 
-        try app.test(.GET, "test") { res in
+        try await app.test(.GET, "test") { res in
             XCTAssertEqual(res.status, .ok)
             try XCTAssertEqual(res.content.decode([String].self), ["foo"])
         }
     }
 
     func testWritable() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
         app.writable = .init(apiKey: "foo")
         XCTAssertEqual(app.writable?.apiKey, "foo")
     }
 
-    func testLifecycle() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-        app.http.server.configuration.port = 0
+    func testLifecycle() async throws {
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
 
         app.lifecycle.use(Hello())
         app.environment.arguments = ["serve"]
-        try app.start()
+        try await app.start()
         app.running?.stop()
     }
     
     func testAsyncLifecycleHandler() async throws {
-        let app = try await Application.make(.testing)
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
         
         app.lifecycle.use(AsyncHello())
         app.environment.arguments = ["serve"]
-        try await app.startup()
+        try await app.start()
         app.running?.stop()
     }
 
     func testLocks() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
         app.sync.withLock {
             // Do something.
         }
@@ -120,8 +123,8 @@ struct MyTestService: MyService {
 private struct ReadOnly {
     let client: Client
 
-    func foos() -> EventLoopFuture<[String]> {
-        self.client.eventLoop.makeSucceededFuture(["foo"])
+    func foos() async -> [String] {
+        ["foo"]
     }
 }
 
@@ -144,7 +147,7 @@ private extension Application {
             self.storage[WritableKey.self]
         }
         set {
-            self.storage[WritableKey.self] = newValue
+            self.storage.setFirstTime(WritableKey.self, to: newValue)
         }
     }
 }

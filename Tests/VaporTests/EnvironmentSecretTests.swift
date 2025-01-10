@@ -3,54 +3,47 @@ import XCTVapor
 import XCTest
 
 final class EnvironmentSecretTests: XCTestCase {
-    func testNonExistingSecretFile() throws {
+    var app: Application!
+    
+    override func setUp() async throws {
+        app = await Application(.testing)
+    }
+    
+    override func tearDown() async throws {
+        try await app.shutdown()
+    }
+    
+    func testNonExistingSecretFile() async throws {
         let folder = #filePath.split(separator: "/").dropLast().joined(separator: "/")
         let path = "/" + folder + "/Utilities/non-existing-secret"
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
-        let eventLoop = app.eventLoopGroup.next()
-        let secretContent = try! Environment.secret(path: path, fileIO: app.fileio, on: eventLoop).wait()
+        let secretContent = try await Environment.secret(path: path, logger: app.logger)
         XCTAssertNil(secretContent)
     }
 
-    func testExistingSecretFile() throws {
+    func testExistingSecretFile() async throws {
         let folder = #filePath.split(separator: "/").dropLast().joined(separator: "/")
         let path = "/" + folder + "/Utilities/my-secret-env-content"
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
-        let eventLoop = app.eventLoopGroup.next()
-        let secretContent = try! Environment.secret(path: path, fileIO: app.fileio, on: eventLoop).wait()
+        let secretContent = try await Environment.secret(path: path, logger: app.logger)
         XCTAssertEqual(secretContent, "password")
     }
 
-    func testExistingSecretFileFromEnvironmentKey() throws {
+    func testExistingSecretFileFromEnvironmentKey() async throws {
         let folder = #filePath.split(separator: "/").dropLast().joined(separator: "/")
         let path = "/" + folder + "/Utilities/my-secret-env-content"
 
         let key = "MY_ENVIRONMENT_SECRET"
         setenv(key, path, 1)
-        let app = Application(.testing)
         defer {
-            app.shutdown()
             unsetenv(key)
         }
 
-        let eventLoop = app.eventLoopGroup.next()
-        let secretContent = try! Environment.secret(key: key, fileIO: app.fileio, on: eventLoop).wait()
+        let secretContent = try await Environment.secret(key: key, logger: app.logger)
         XCTAssertEqual(secretContent, "password")
     }
 
-    func testLoadingSecretFromEnvKeyWhichDoesNotExist() throws {
+    func testLoadingSecretFromEnvKeyWhichDoesNotExist() async throws {
         let key = "MY_NON_EXISTING_ENVIRONMENT_SECRET"
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
-        let eventLoop = app.eventLoopGroup.next()
-        let secretContent = try! Environment.secret(key: key, fileIO: app.fileio, on: eventLoop).wait()
+        let secretContent = try await Environment.secret(key: key, logger: app.logger)
         XCTAssertNil(secretContent)
     }
 }

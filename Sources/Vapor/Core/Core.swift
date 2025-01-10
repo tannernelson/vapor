@@ -9,14 +9,9 @@ extension Application {
         set { self.core.storage.console.withLockedValue { $0 = newValue } }
     }
 
-    public var commands: Commands {
+    public var commands: AsyncCommands {
         get { self.core.storage.commands.withLockedValue { $0 } }
         set { self.core.storage.commands.withLockedValue { $0 = newValue } }
-    }
-
-    public var asyncCommands: AsyncCommands {
-        get { self.core.storage.asyncCommands.withLockedValue { $0 } }
-        set { self.core.storage.asyncCommands.withLockedValue { $0 = newValue } }
     }
 
     /// The application thread pool. Vapor provides a thread pool with 64 threads by default.
@@ -38,6 +33,7 @@ extension Application {
                 fatalError("Cannot replace thread pool after application has booted")
             }
 
+#warning("Fix - we can't call sync shutdown")
             self.core.storage.threadPool.withLockedValue({
                 try! $0.syncShutdownGracefully()
                 $0 = newValue
@@ -45,11 +41,7 @@ extension Application {
             })
         }
     }
-
-    public var fileio: NonBlockingFileIO {
-        .init(threadPool: self.threadPool)
-    }
-
+    
     public var allocator: ByteBufferAllocator {
         self.core.storage.allocator
     }
@@ -71,8 +63,7 @@ extension Application {
     public struct Core: Sendable {
         final class Storage: Sendable {
             let console: NIOLockedValueBox<Console>
-            let commands: NIOLockedValueBox<Commands>
-            let asyncCommands: NIOLockedValueBox<AsyncCommands>
+            let commands: NIOLockedValueBox<AsyncCommands>
             let threadPool: NIOLockedValueBox<NIOThreadPool>
             let allocator: ByteBufferAllocator
             let running: Application.Running.Storage
@@ -80,10 +71,9 @@ extension Application {
 
             init() {
                 self.console = .init(Terminal())
-                self.commands = .init(Commands())
-                var asyncCommands = AsyncCommands()
-                asyncCommands.use(BootCommand(), as: "boot")
-                self.asyncCommands = .init(AsyncCommands())
+                var commands = AsyncCommands()
+                commands.use(BootCommand(), as: "boot")
+                self.commands = .init(commands)
                 let threadPool = NIOThreadPool(numberOfThreads: System.coreCount)
                 threadPool.start()
                 self.threadPool = .init(threadPool)
@@ -94,13 +84,7 @@ extension Application {
         }
 
         struct LifecycleHandler: Vapor.LifecycleHandler {
-            func shutdown(_ application: Application) {
-                try! application.threadPool.syncShutdownGracefully()
-            }
-        }
-        
-        struct AsyncLifecycleHandler: Vapor.LifecycleHandler {
-            func shutdownAsync(_ application: Application) async {
+            func shutdown(_ application: Application) async {
                 do {
                     try await application.threadPool.shutdownGracefully()
                 } catch {
@@ -122,13 +106,9 @@ extension Application {
             return storage
         }
 
-        func initialize(asyncEnvironment: Bool) {
-            self.application.storage[Key.self] = .init()
-            if asyncEnvironment {
-                self.application.lifecycle.use(AsyncLifecycleHandler())
-            } else {
-                self.application.lifecycle.use(LifecycleHandler())
-            }
+        func initialize() async {
+            await self.application.storage.set(Key.self, to: .init())
+            self.application.lifecycle.use(LifecycleHandler())
         }
     }
 }

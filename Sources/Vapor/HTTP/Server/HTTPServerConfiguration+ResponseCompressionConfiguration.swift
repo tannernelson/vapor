@@ -48,19 +48,6 @@ extension HTTPServer.Configuration {
             )
         }
         
-        /// Enables compression with custom configuration.
-        @available(*, deprecated, renamed: "enabled(initialByteBufferCapacity:disallowedTypes:allowRequestOverrides:)", message: "Renamed to allow for more parameters.")
-        @_disfavoredOverload // TODO: Remove this overload in Vapor 5
-        public static func enabled(
-            initialByteBufferCapacity: Int
-        ) -> Self {
-            .enabled(
-                initialByteBufferCapacity: initialByteBufferCapacity,
-                disallowedTypes: .incompressible,
-                allowRequestOverrides: true
-            )
-        }
-        
         /// Disables compression by default, but offers options to allow it for the specified types.
         ///
         /// - Parameters:
@@ -156,7 +143,4 @@ extension HTTPServer.Configuration {
             set { storage.allowRequestOverrides = newValue }
         }
     }
-    
-    @available(*, deprecated, renamed: "ResponseCompressionConfiguration", message: "Renamed to ResponseCompressionConfiguration for clarity.")
-    public typealias CompressionConfiguration = ResponseCompressionConfiguration
 }

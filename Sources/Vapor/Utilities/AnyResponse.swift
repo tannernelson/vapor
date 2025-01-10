@@ -2,7 +2,7 @@ import NIOCore
 
 /// A type erased response useful for routes that can return more than one type.
 ///
-///     router.get("foo") { req -> AnyResponse in
+///     app.get("foo") { req -> AnyResponse in
 ///         if /* something */ {
 ///             return AnyResponse(42)
 ///         } else {
@@ -16,15 +16,15 @@ import NIOCore
 ///         case int(Int)
 ///         case string(String)
 ///
-///         func encode(for req: Request) throws -> EventLoopFuture<Response> {
+///         func encode(for req: Request) async throws -> Response {
 ///             switch self {
-///             case .int(let i): return try i.encode(for: req)
-///             case .string(let s): return try s.encode(for: req)
+///             case .int(let i): return try await i.encode(for: req)
+///             case .string(let s): return try await s.encode(for: req)
 ///             }
 ///         }
 ///     }
 ///
-///     router.get("foo") { req -> IntOrString in
+///     app.get("foo") { req -> IntOrString in
 ///         if /* something */ {
 ///             return .int(42)
 ///         } else {
@@ -44,7 +44,7 @@ public struct AnyResponse: ResponseEncodable {
         self.encodable = encodable
     }
 
-    public func encodeResponse(for request: Request) -> EventLoopFuture<Response> {
-        return self.encodable.encodeResponse(for: request)
+    public func encodeResponse(for request: Request) async throws -> Response {
+        return try await self.encodable.encodeResponse(for: request)
     }
 }

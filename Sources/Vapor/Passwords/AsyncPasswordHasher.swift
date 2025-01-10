@@ -26,33 +26,28 @@ public struct AsyncPasswordHasher: Sendable {
         self.eventLoop = eventLoop
     }
     
-    public func hash<Password>(_ password: Password) -> EventLoopFuture<[UInt8]>
+    public func hash<Password>(_ password: Password) async throws -> [UInt8]
         where Password: DataProtocol & Sendable
     {
-        return self.threadPool.runIfActive(eventLoop: self.eventLoop) {
-            try self.hasher.hash(password)
-        }
+        try await self.hasher.hash(password)
     }
     
     public func verify<Password, Digest>(
         _ password: Password,
         created digest: Digest
-    ) -> EventLoopFuture<Bool>
+    ) async throws -> Bool
         where Password: DataProtocol & Sendable, Digest: DataProtocol & Sendable
     {
-        return self.threadPool.runIfActive(eventLoop: self.eventLoop) {
-            try self.hasher.verify(password, created: digest)
-        }
+        try await self.hasher.verify(password, created: digest)
     }
     
-    public func hash(_ password: String) -> EventLoopFuture<String> {
-        self.hash([UInt8](password.utf8)).map {
-            String(decoding: $0, as: UTF8.self)
-        }
+    public func hash(_ password: String) async throws -> String {
+        let bytes = try await self.hash([UInt8](password.utf8))
+        return String(decoding: bytes, as: UTF8.self)
     }
 
-    public func verify(_ password: String, created digest: String) -> EventLoopFuture<Bool> {
-        self.verify(
+    public func verify(_ password: String, created digest: String) async throws -> Bool {
+        try await self.verify(
             [UInt8](password.utf8),
             created: [UInt8](digest.utf8)
         )

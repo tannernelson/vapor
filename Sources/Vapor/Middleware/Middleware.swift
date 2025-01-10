@@ -4,14 +4,13 @@ import NIOCore
 /// mutating both incoming requests and outgoing responses. `Middleware` can choose
 /// to pass requests on to the next `Middleware` in a chain, or they can short circuit and
 /// return a custom `Response` if desired.
-@preconcurrency
 public protocol Middleware: Sendable {
     /// Called with each `Request` that passes through this middleware.
     /// - parameters:
     ///     - request: The incoming `Request`.
     ///     - next: Next `Responder` in the chain, potentially another middleware or the main router.
     /// - returns: An asynchronous `Response`.
-    func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response>
+    func respond(to request: Request, chainingTo next: Responder) async throws -> Response
 }
 
 extension Array where Element == Middleware {
@@ -46,9 +45,7 @@ private struct HTTPMiddlewareResponder: Responder {
     /// - parameters:
     ///     - request: The incoming `Request`.
     /// - returns: An asynchronous `Response`.
-    func respond(to request: Request) -> EventLoopFuture<Response> {
-        return request.propagateTracingIfEnabled {
-            self.middleware.respond(to: request, chainingTo: self.responder)
-        }
+    func respond(to request: Request) async throws -> Response {
+        return try await self.middleware.respond(to: request, chainingTo: self.responder)
     }
 }

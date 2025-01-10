@@ -1,11 +1,13 @@
 extension Application {
     public var routes: Routes {
-        if let existing = self.storage[RoutesKey.self] {
-            return existing
-        } else {
-            let new = Routes()
-            self.storage[RoutesKey.self] = new
-            return new
+        get {
+            if let existing = self.storage[RoutesKey.self] {
+                return existing
+            } else {
+                let new = Routes()
+                self.storage.setFirstTime(RoutesKey.self, to: new)
+                return new
+            }
         }
     }
 

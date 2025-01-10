@@ -123,47 +123,43 @@ public final class CORSMiddleware: Middleware {
         self.configuration = configuration
     }
 
-    public func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
+    public func respond(to request: Request, chainingTo next: Responder) async throws -> Response {
         // Check if it's valid CORS request
         guard request.headers[.origin].first != nil else {
-            return next.respond(to: request)
+            return try await next.respond(to: request)
         }
         
         // Determine if the request is pre-flight.
         // If it is, create empty response otherwise get response from the responder chain.
-        let response = request.isPreflight
-            ? request.eventLoop.makeSucceededFuture(.init())
-            : next.respond(to: request)
+        let response = request.isPreflight ? Response() : try await next.respond(to: request)
         
-        return response.map { response in
-            // Modify response headers based on CORS settings
-            let originBasedAccessControlAllowHeader = self.configuration.allowedOrigin.header(forRequest: request)
-            response.responseBox.withLockedValue { box in
-                if !originBasedAccessControlAllowHeader.isEmpty {
-                    box.headers.replaceOrAdd(name: .accessControlAllowOrigin, value: originBasedAccessControlAllowHeader)
-                }
-
-                box.headers.replaceOrAdd(name: .accessControlAllowHeaders, value: self.configuration.allowedHeaders)
-                box.headers.replaceOrAdd(name: .accessControlAllowMethods, value: self.configuration.allowedMethods)
-                
-                if let exposedHeaders = self.configuration.exposedHeaders {
-                    box.headers.replaceOrAdd(name: .accessControlExpose, value: exposedHeaders)
-                }
-                
-                if let cacheExpiration = self.configuration.cacheExpiration {
-                    box.headers.replaceOrAdd(name: .accessControlMaxAge, value: String(cacheExpiration))
-                }
-                
-                if self.configuration.allowCredentials {
-                    box.headers.replaceOrAdd(name: .accessControlAllowCredentials, value: "true")
-                }
-
-                if case .originBased = self.configuration.allowedOrigin, !originBasedAccessControlAllowHeader.isEmpty {
-                    box.headers.add(name: .vary, value: "origin")
-                }
+        // Modify response headers based on CORS settings
+        let originBasedAccessControlAllowHeader = self.configuration.allowedOrigin.header(forRequest: request)
+        response.responseBox.withLockedValue { box in
+            if !originBasedAccessControlAllowHeader.isEmpty {
+                box.headers.replaceOrAdd(name: .accessControlAllowOrigin, value: originBasedAccessControlAllowHeader)
             }
-            return response
+            
+            box.headers.replaceOrAdd(name: .accessControlAllowHeaders, value: self.configuration.allowedHeaders)
+            box.headers.replaceOrAdd(name: .accessControlAllowMethods, value: self.configuration.allowedMethods)
+            
+            if let exposedHeaders = self.configuration.exposedHeaders {
+                box.headers.replaceOrAdd(name: .accessControlExpose, value: exposedHeaders)
+            }
+            
+            if let cacheExpiration = self.configuration.cacheExpiration {
+                box.headers.replaceOrAdd(name: .accessControlMaxAge, value: String(cacheExpiration))
+            }
+            
+            if self.configuration.allowCredentials {
+                box.headers.replaceOrAdd(name: .accessControlAllowCredentials, value: "true")
+            }
+
+            if case .originBased = self.configuration.allowedOrigin, !originBasedAccessControlAllowHeader.isEmpty {
+                box.headers.add(name: .vary, value: "origin")
+            }
         }
+        return response
     }
 }
 

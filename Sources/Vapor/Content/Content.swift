@@ -18,7 +18,7 @@ import NIOCore
 ///         return Hello() // {"message":"Hello!"}
 ///     }
 ///
-public protocol Content: Codable, RequestDecodable, ResponseEncodable, AsyncRequestDecodable, AsyncResponseEncodable, Sendable {
+public protocol Content: Codable, RequestDecodable, ResponseEncodable, Sendable {
     /// The default `MediaType` to use when _encoding_ content. This can always be overridden at the encode call.
     ///
     /// Default implementation is `MediaType.json` for all types.
@@ -64,25 +64,6 @@ extension Content {
     public static var defaultContentType: HTTPMediaType {
         return .json
     }
-    
-    public static func decodeRequest(_ request: Request) -> EventLoopFuture<Self> {
-        do {
-            let content = try request.content.decode(Self.self)
-            return request.eventLoop.makeSucceededFuture(content)
-        } catch {
-            return request.eventLoop.makeFailedFuture(error)
-        }
-    }
-    
-    public func encodeResponse(for request: Request) -> EventLoopFuture<Response> {
-        let response = Response()
-        do {
-            try response.content.encode(self)
-        } catch {
-            return request.eventLoop.makeFailedFuture(error)
-        }
-        return request.eventLoop.makeSucceededFuture(response)
-    }
 
     public mutating func beforeEncode() throws { }
     public mutating func afterDecode() throws { }
@@ -123,13 +104,13 @@ extension BinaryFloatingPoint where Self: Content {
 extension Double: Content { }
 extension Float: Content { }
 
-extension Array: Content, ResponseEncodable, RequestDecodable, AsyncRequestDecodable, AsyncResponseEncodable where Element: Content {
+extension Array: Content, ResponseEncodable, RequestDecodable where Element: Content {
     public static var defaultContentType: HTTPMediaType {
         return .json
     }
 }
 
-extension Dictionary: Content, ResponseEncodable, RequestDecodable, AsyncRequestDecodable, AsyncResponseEncodable where Key == String, Value: Content {
+extension Dictionary: Content, ResponseEncodable, RequestDecodable where Key == String, Value: Content {
     public static var defaultContentType: HTTPMediaType {
         return .json
     }

@@ -8,7 +8,7 @@ public struct Validations: Sendable {
     }
     
     public mutating func add<T>(
-        _ key: ValidationKey,
+        _ key: BasicCodingKey,
         as type: T.Type = T.self,
         is validator: Validator<T> = .valid,
         required: Bool = true,
@@ -18,7 +18,7 @@ public struct Validations: Sendable {
     }
     
     public mutating func add(
-        _ key: ValidationKey,
+        _ key: BasicCodingKey,
         result: ValidatorResult,
         customFailureDescription: String? = nil
     ) {
@@ -26,7 +26,7 @@ public struct Validations: Sendable {
     }
 
     public mutating func add(
-        _ key: ValidationKey,
+        _ key: BasicCodingKey,
         required: Bool = true,
         customFailureDescription: String? = nil,
         _ nested: (inout Validations) -> ()
@@ -36,8 +36,8 @@ public struct Validations: Sendable {
         self.storage.append(.init(nested: key, required: required, keyed: validations, customFailureDescription: customFailureDescription))
     }
     
-    @preconcurrency public mutating func add(
-        each key: ValidationKey,
+    public mutating func add(
+        each key: BasicCodingKey,
         required: Bool = true,
         customFailureDescription: String? = nil,
         _ handler: @Sendable @escaping (Int, inout Validations) -> ()
@@ -67,7 +67,7 @@ public struct Validations: Sendable {
     }
     
     public func validate(_ decoder: Decoder) throws -> ValidationsResult {
-        let container = try decoder.container(keyedBy: ValidationKey.self)
+        let container = try decoder.container(keyedBy: BasicCodingKey.self)
         
         return try .init(results: self.storage.map {
             try .init(

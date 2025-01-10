@@ -3,9 +3,8 @@ import Vapor
 import XCTest
 
 final class LoggingTests: XCTestCase {
-    func testChangeRequestLogLevel() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
+    func testChangeRequestLogLevel() async throws {
+        let app = await Application(.testing)
 
         app.get("trace") { req -> String in
             req.logger.logLevel = .trace
@@ -13,9 +12,11 @@ final class LoggingTests: XCTestCase {
             return "done"
         }
 
-        try app.testable().test(.GET, "trace") { res in
+        try await app.testable().test(.GET, "trace") { res in
             XCTAssertEqual(res.status, .ok)
             XCTAssertEqual(res.body.string, "done")
         }
+        
+        try await app.shutdown()
     }
 }

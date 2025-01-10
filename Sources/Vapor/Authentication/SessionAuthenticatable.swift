@@ -5,41 +5,33 @@ public protocol SessionAuthenticator: Authenticator {
     associatedtype User: SessionAuthenticatable
 
     /// Authenticate a model with the supplied ID.
-    func authenticate(sessionID: User.SessionID, for request: Request) -> EventLoopFuture<Void>
+    func authenticate(sessionID: User.SessionID, for request: Request) async throws -> Void
 }
 
 extension SessionAuthenticator {
-    public func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
+    public func respond(to request: Request, chainingTo next: Responder) async throws -> Response {
         // if the user has already been authenticated
         // by a previous middleware, continue
-        if request.auth.has(User.self) {
-            return next.respond(to: request)
+        if await request.auth.has(User.self) {
+            return try await next.respond(to: request)
         }
 
-        let future: EventLoopFuture<Void>
-        if let aID = request.session.authenticated(User.self) {
+        if let aID = await request.session.authenticated(User.self) {
             // try to find user with id from session
-            future = self.authenticate(sessionID: aID, for: request)
-        } else {
-            // no need to authenticate
-            future = request.eventLoop.makeSucceededFuture(())
+            try await self.authenticate(sessionID: aID, for: request)
         }
+        
+        let response = try await next.respond(to: request)
 
-        // map the auth future to a response
-        return future.flatMap { _ in
-            // respond to the request
-            return next.respond(to: request).map { response in
-                if let user = request.auth.get(User.self) {
-                    // if a user has been authed (or is still authed), store in the session
-                    request.session.authenticate(user)
-                } else if request.hasSession {
-                    // if no user is authed, it's possible they've been unauthed.
-                    // remove from session.
-                    request.session.unauthenticate(User.self)
-                }
-                return response
-            }
+        if let user = await request.auth.get(User.self) {
+            // if a user has been authed (or is still authed), store in the session
+            await request.session.authenticate(user)
+        } else if await request.hasSession {
+            // if no user is authed, it's possible they've been unauthed.
+            // remove from session.
+            await request.session.unauthenticate(User.self)
         }
+        return response
     }
 }
 
@@ -47,7 +39,7 @@ extension SessionAuthenticator {
 /// status cached using `SessionAuthenticator`.
 public protocol SessionAuthenticatable: Authenticatable {
     /// Session identifier type.
-    associatedtype SessionID: LosslessStringConvertible
+    associatedtype SessionID: LosslessStringConvertible, Sendable
 
     /// Unique session identifier.
     var sessionID: SessionID { get }

@@ -5,6 +5,16 @@ import NIOCore
 
 final class EndpointCacheTests: XCTestCase {
     
+    var app: Application!
+    
+    override func setUp() async throws {
+        self.app = await Application(.testing)
+    }
+    
+    override func tearDown() async throws {
+        try await self.app.shutdown()
+    }
+    
     actor CurrentActor {
         var current = 0
         
@@ -18,10 +28,7 @@ final class EndpointCacheTests: XCTestCase {
     }
     
     
-    func testEndpointCacheNoCache() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
+    func testEndpointCacheNoCache() async throws {
         let currentActor = CurrentActor()
         struct Test: Content {
             let number: Int
@@ -37,27 +44,24 @@ final class EndpointCacheTests: XCTestCase {
 
         let cache = EndpointCache<Test>(uri: "/number")
         do {
-            let test = try cache.get(
+            let test = try await cache.get(
                 using: app.client,
                 logger: app.logger,
                 on: app.eventLoopGroup.next()
-            ).wait()
+            )
             XCTAssertEqual(test.number, 0)
         }
         do {
-            let test = try cache.get(
+            let test = try await cache.get(
                 using: app.client,
                 logger: app.logger,
                 on: app.eventLoopGroup.next()
-            ).wait()
+            )
             XCTAssertEqual(test.number, 1)
         }
     }
 
-    func testEndpointCacheMaxAge() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
+    func testEndpointCacheMaxAge() async throws {
         let currentActor = CurrentActor()
         struct Test: Content {
             let number: Int
@@ -76,29 +80,29 @@ final class EndpointCacheTests: XCTestCase {
 
         let cache = EndpointCache<Test>(uri: "/number")
         do {
-            let test = try cache.get(
+            let test = try await cache.get(
                 using: app.client,
                 logger: app.logger,
                 on: app.eventLoopGroup.next()
-            ).wait()
+            )
             XCTAssertEqual(test.number, 0)
         }
         do {
-            let test = try cache.get(
+            let test = try await cache.get(
                 using: app.client,
                 logger: app.logger,
                 on: app.eventLoopGroup.next()
-            ).wait()
+            )
             XCTAssertEqual(test.number, 0)
         }
         // wait for expiry
         sleep(1)
         do {
-            let test = try cache.get(
+            let test = try await cache.get(
                 using: app.client,
                 logger: app.logger,
                 on: app.eventLoopGroup.next()
-            ).wait()
+            )
             XCTAssertEqual(test.number, 1)
         }
     }

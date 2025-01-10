@@ -10,23 +10,25 @@ final class AsyncWebSocketTests: XCTestCase {
     
     override func setUp() async throws {
         let test = Environment(name: "testing", arguments: ["vapor"])
-        app = try await Application.make(test)
+        app = await Application(test)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testWebSocketClient() async throws {
-        let server = try await Application.make(.testing)
+        let server = await Application(.testing)
 
-        server.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
 
         server.webSocket("echo") { req, ws in
             ws.onText { ws.send($1) }
         }
         server.environment.arguments = ["serve"]
-        try await server.startup()
+        try await server.start()
 
         guard let localAddress = server.http.server.shared.localAddress, let port = localAddress.port else {
             XCTFail("couldn't get port from \(server.http.server.shared.localAddress.debugDescription)")
@@ -36,6 +38,7 @@ final class AsyncWebSocketTests: XCTestCase {
         let elg = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         let promise = elg.next().makePromise(of: String.self)
+#warning("TODO migrate")
         try await WebSocket.connect(
             to: "ws://localhost:\(port)/echo",
             on: elg.next()
@@ -45,18 +48,20 @@ final class AsyncWebSocketTests: XCTestCase {
                 promise.succeed(text)
                 ws.close().cascadeFailure(to: promise)
             }
-        }
+        }.get()
 
         let string = try await promise.futureResult.get()
         XCTAssertEqual(string, "Hello, world!")
         
-        try await server.asyncShutdown()
+        try await server.shutdown()
     }
 
 
     // https://github.com/vapor/vapor/issues/1997
     func testWebSocket404() async throws {
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
 
         app.webSocket("bar") { req, ws in
             ws.close(promise: nil)
@@ -64,7 +69,7 @@ final class AsyncWebSocketTests: XCTestCase {
 
         app.environment.arguments = ["serve"]
 
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,
@@ -74,10 +79,11 @@ final class AsyncWebSocketTests: XCTestCase {
         }
 
         do {
+#warning("TODO migrate")
             try await WebSocket.connect(
                 to: "ws://localhost:\(port)/foo",
                 on: app.eventLoopGroup.next()
-            ) { _ in  }
+            ) { _ in  }.get()
             XCTFail("should have failed")
         } catch {
             // pass
@@ -90,10 +96,12 @@ final class AsyncWebSocketTests: XCTestCase {
             ws.send("foo")
             ws.close(promise: nil)
         }
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
         app.environment.arguments = ["serve"]
 
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,
@@ -118,7 +126,9 @@ final class AsyncWebSocketTests: XCTestCase {
     }
 
     func testManualUpgradeToWebSocket() async throws {
-        app.http.server.configuration.port = 0
+        var config = app.http.server.configuration
+        config.port = 0
+        await app.http.server.shared.updateConfiguration(config)
 
         app.get("foo") { req in
             return req.webSocket { req, ws in
@@ -129,7 +139,7 @@ final class AsyncWebSocketTests: XCTestCase {
 
         app.environment.arguments = ["serve"]
 
-        try await app.startup()
+        try await app.start()
         
         XCTAssertNotNil(app.http.server.shared.localAddress)
         guard let localAddress = app.http.server.shared.localAddress,

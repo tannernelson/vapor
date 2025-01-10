@@ -5,12 +5,20 @@ import Metrics
 import XCTest
 
 class MetricsTests: XCTestCase {
-    func testMetricsIncreasesCounter() {
+    
+    var app: Application!
+    
+    override func setUp() async throws {
+        self.app = await Application(.testing)
+    }
+    
+    override func tearDown() async throws {
+        try await self.app.shutdown()
+    }
+    
+    func testMetricsIncreasesCounter() async throws {
         let metrics = CapturingMetricsSystem()
         MetricsSystem.bootstrapInternal(metrics)
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
 
         struct User: Content {
             let id: Int
@@ -26,7 +34,7 @@ class MetricsTests: XCTestCase {
             }
         }
 
-        XCTAssertNoThrow(try app.testable().test(.GET, "/users/1") { res in
+        try await app.testable().test(.GET, "/users/1") { res in
             XCTAssertEqual(res.status, .ok)
             let resData = try res.content.decode(User.self)
             XCTAssertEqual(resData.id, 1)
@@ -47,15 +55,12 @@ class MetricsTests: XCTestCase {
             XCTAssertEqual(timerMethodDimension.1, "GET")
             let timerStatusDimension = try XCTUnwrap(timer.dimensions.first(where: { $0.0 == "status"}))
             XCTAssertEqual(timerStatusDimension.1, "200")
-        })
+        }
     }
 
-    func testID404DoesntSpamMetrics() {
+    func testID404DoesntSpamMetrics() async throws {
         let metrics = CapturingMetricsSystem()
         MetricsSystem.bootstrapInternal(metrics)
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
 
         struct User: Content {
             let id: Int
@@ -71,7 +76,7 @@ class MetricsTests: XCTestCase {
             }
         }
 
-        XCTAssertNoThrow(try app.testable().test(.GET, "/users/2") { res in
+        try await app.testable().test(.GET, "/users/2") { res in
             XCTAssertEqual(res.status, .notFound)
             let counter = metrics.counters["http_requests_total"] as! TestCounter
             let pathDimension = try XCTUnwrap(counter.dimensions.first(where: { $0.0 == "path"}))
@@ -91,17 +96,14 @@ class MetricsTests: XCTestCase {
             let timerStatusDimension = try XCTUnwrap(timer.dimensions.first(where: { $0.0 == "status"}))
             XCTAssertEqual(timerStatusDimension.1, "404")
             XCTAssertNil(timer.dimensions.first(where: { $0.1 == "200" }))
-        })
+        }
     }
 
-    func test404RewritesPathForMetricsToAvoidDOSAttack()  {
+    func test404RewritesPathForMetricsToAvoidDOSAttack() async throws {
         let metrics = CapturingMetricsSystem()
         MetricsSystem.bootstrapInternal(metrics)
 
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
-        XCTAssertNoThrow(try app.testable().test(.GET, "/not/found") { res in
+        try await app.testable().test(.GET, "/not/found") { res in
             XCTAssertEqual(res.status, .notFound)
             XCTAssertEqual(metrics.counters.count, 1)
             let counter = metrics.counters["http_requests_total"] as! TestCounter
@@ -120,16 +122,16 @@ class MetricsTests: XCTestCase {
             let timerStatusDimension = try XCTUnwrap(timer.dimensions.first(where: { $0.0 == "status"}))
             XCTAssertEqual(timerStatusDimension.1, "404")
             XCTAssertNil(timer.dimensions.first(where: { $0.1 == "200" }))
-        })
+        }
     }
 
-    func testMetricsDisabled() {
+    func testMetricsDisabled() async throws {
         let metrics = CapturingMetricsSystem()
         MetricsSystem.bootstrapInternal(metrics)
 
-        let app = Application(.testing)
-        app.http.server.configuration.reportMetrics = false
-        defer { app.shutdown() }
+        var config = app.http.server.configuration
+        config.reportMetrics = true
+        await app.http.server.shared.updateConfiguration(config)
 
         struct User: Content {
             let id: Int
@@ -145,13 +147,13 @@ class MetricsTests: XCTestCase {
             }
         }
 
-        XCTAssertNoThrow(try app.testable().test(.GET, "/users/1") { res in
+        try await app.testable().test(.GET, "/users/1") { res in
             XCTAssertEqual(res.status, .ok)
             let resData = try res.content.decode(User.self)
             XCTAssertEqual(resData.id, 1)
             XCTAssertEqual(metrics.counters.count, 0)
             XCTAssertNil(metrics.timers["http_request_duration_seconds"])
-        })
+        }
     }
 }
 

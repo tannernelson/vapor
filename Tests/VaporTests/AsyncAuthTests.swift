@@ -7,27 +7,27 @@ final class AsyncAuthenticationTests: XCTestCase {
     var app: Application!
     
     override func setUp() async throws {
-        app = try await Application.make(.testing)
+        app = await Application(.testing)
     }
     
     override func tearDown() async throws {
-        try await app.asyncShutdown()
+        try await app.shutdown()
     }
     
     func testBearerAuthenticator() async throws {
         struct Test: Authenticatable {
-            static func authenticator() -> AsyncAuthenticator {
+            static func authenticator() -> Authenticator {
                 TestAuthenticator()
             }
 
             var name: String
         }
 
-        struct TestAuthenticator: AsyncBearerAuthenticator {
+        struct TestAuthenticator: BearerAuthenticator {
             func authenticate(bearer: BearerAuthorization, for request: Request) async throws {
                 if bearer.token == "test" {
                     let test = Test(name: "Vapor")
-                    request.auth.login(test)
+                    await request.auth.login(test)
                 }
             }
         }
@@ -35,7 +35,7 @@ final class AsyncAuthenticationTests: XCTestCase {
         app.routes.grouped([
             Test.authenticator(), Test.guardMiddleware()
         ]).get("test") { req -> String in
-            return try req.auth.require(Test.self).name
+            return try await req.auth.require(Test.self).name
         }
 
         try await app.testable().test(.GET, "/test") { res async in
@@ -53,20 +53,20 @@ final class AsyncAuthenticationTests: XCTestCase {
 
     func testBasicAuthenticator() async throws {
         struct Test: Authenticatable {
-            static func authenticator() -> AsyncAuthenticator {
+            static func authenticator() -> Authenticator {
                 TestAuthenticator()
             }
 
             var name: String
         }
 
-        struct TestAuthenticator: AsyncBasicAuthenticator {
+        struct TestAuthenticator: BasicAuthenticator {
             typealias User = Test
 
             func authenticate(basic: BasicAuthorization, for request: Request) async throws {
                 if basic.username == "test" && basic.password == "secret" {
                     let test = Test(name: "Vapor")
-                    request.auth.login(test)
+                    await request.auth.login(test)
                 }
             }
         }
@@ -74,7 +74,7 @@ final class AsyncAuthenticationTests: XCTestCase {
         app.routes.grouped([
             Test.authenticator(), Test.guardMiddleware()
         ]).get("test") { req -> String in
-            return try req.auth.require(Test.self).name
+            return try await req.auth.require(Test.self).name
         }
 
         let basic = "test:secret".data(using: .utf8)!.base64EncodedString()
@@ -91,20 +91,20 @@ final class AsyncAuthenticationTests: XCTestCase {
 
     func testBasicAuthenticatorWithColonInPassword() async throws {
         struct Test: Authenticatable {
-            static func authenticator() -> AsyncAuthenticator {
+            static func authenticator() -> Authenticator {
                 TestAuthenticator()
             }
 
             var name: String
         }
 
-        struct TestAuthenticator: AsyncBasicAuthenticator {
+        struct TestAuthenticator: BasicAuthenticator {
             typealias User = Test
 
             func authenticate(basic: BasicAuthorization, for request: Request) async throws {
                 if basic.username == "test" && basic.password == "secret:with:colon" {
                     let test = Test(name: "Vapor")
-                    request.auth.login(test)
+                    await request.auth.login(test)
                 }
             }
         }
@@ -112,7 +112,7 @@ final class AsyncAuthenticationTests: XCTestCase {
         app.routes.grouped([
             Test.authenticator(), Test.guardMiddleware()
         ]).get("test") { req -> String in
-            return try req.auth.require(Test.self).name
+            return try await req.auth.require(Test.self).name
         }
 
         let basic = "test:secret:with:colon".data(using: .utf8)!.base64EncodedString()
@@ -126,20 +126,20 @@ final class AsyncAuthenticationTests: XCTestCase {
 
     func testBasicAuthenticatorWithRedirect() async throws {
         struct Test: Authenticatable {
-            static func authenticator() -> AsyncAuthenticator {
+            static func authenticator() -> Authenticator {
                 TestAuthenticator()
             }
 
             var name: String
         }
 
-        struct TestAuthenticator: AsyncBasicAuthenticator {
+        struct TestAuthenticator: BasicAuthenticator {
             typealias User = Test
 
             func authenticate(basic: BasicAuthorization, for request: Request) async throws {
                 if basic.username == "test" && basic.password == "secret" {
                     let test = Test(name: "Vapor")
-                    request.auth.login(test)
+                    await request.auth.login(test)
                 }
             }
         }
@@ -151,7 +151,7 @@ final class AsyncAuthenticationTests: XCTestCase {
         app.routes.grouped([
             Test.authenticator(), redirectMiddleware
         ]).get("test") { req -> String in
-            return try req.auth.require(Test.self).name
+            return try await req.auth.require(Test.self).name
         }
 
         let basic = "test:secret".data(using: .utf8)!.base64EncodedString()
@@ -166,11 +166,11 @@ final class AsyncAuthenticationTests: XCTestCase {
 
     func testSessionAuthentication() async throws {
         struct Test: Authenticatable, SessionAuthenticatable {
-            static func bearerAuthenticator() -> AsyncAuthenticator {
+            static func bearerAuthenticator() -> Authenticator {
                 TestBearerAuthenticator()
             }
 
-            static func sessionAuthenticator() -> AsyncAuthenticator {
+            static func sessionAuthenticator() -> Authenticator {
                 TestSessionAuthenticator()
             }
 
@@ -180,21 +180,21 @@ final class AsyncAuthenticationTests: XCTestCase {
             var name: String
         }
 
-        struct TestBearerAuthenticator: AsyncBearerAuthenticator {
+        struct TestBearerAuthenticator: BearerAuthenticator {
             func authenticate(bearer: BearerAuthorization, for request: Request) async throws {
                 if bearer.token == "test" {
                     let test = Test(name: "Vapor")
-                    request.auth.login(test)
+                    await request.auth.login(test)
                 }
             }
         }
 
-        struct TestSessionAuthenticator: AsyncSessionAuthenticator {
+        struct TestSessionAuthenticator: SessionAuthenticator {
             typealias User = Test
 
             func authenticate(sessionID: String, for request: Request) async throws {
                 let test = Test(name: sessionID)
-                request.auth.login(test)
+                await request.auth.login(test)
             }
         }
 
@@ -204,7 +204,7 @@ final class AsyncAuthenticationTests: XCTestCase {
             Test.bearerAuthenticator(),
             Test.guardMiddleware(),
         ]).get("test") { req -> String in
-            try req.auth.require(Test.self).name
+            try await req.auth.require(Test.self).name
         }
 
         var sessionCookie: HTTPCookies.Value?
@@ -229,13 +229,13 @@ final class AsyncAuthenticationTests: XCTestCase {
 
     func testMiddlewareConfigExistential() async {
         struct Test: Authenticatable {
-            static func authenticator() -> AsyncAuthenticator {
+            static func authenticator() -> Authenticator {
                 TestAuthenticator()
             }
             var name: String
         }
 
-        struct TestAuthenticator: AsyncBearerAuthenticator {
+        struct TestAuthenticator: BearerAuthenticator {
             typealias User = Test
 
             func authenticate(bearer: BearerAuthorization, for request: Request) async throws {}

@@ -24,7 +24,7 @@ extension Application.HTTP {
                     configuration: self.configuration,
                     on: self.application.eventLoopGroup
                 )
-                self.application.storage[Key.self] = new
+                self.application.storage.setFirstTime(Key.self, to: new)
                 return new
             }
         }
@@ -50,15 +50,6 @@ extension Application.HTTP {
                 self.application.storage[ConfigurationKey.self] ?? .init(
                     logger: self.application.logger
                 )
-            }
-            nonmutating set {
-                /// If a server is available, configure it directly, otherwise cache a configuration instance
-                /// here to be used until the server is instantiated.
-                if let server = self.application.storage[Key.self] {
-                    server.configuration = newValue
-                } else {
-                    self.application.storage[ConfigurationKey.self] = newValue
-                }
             }
         }
 

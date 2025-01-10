@@ -28,10 +28,6 @@ public protocol DebuggableError: LocalizedError, CustomDebugStringConvertible, C
     /// Optional source for this error
     var source: ErrorSource? { get }
 
-    /// Stack trace from which this error originated (must set this from the error's init)
-    @available(*, deprecated, message: "Captured stack traces are no longer supported by Vapor")
-    var stackTrace: StackTrace? { get }
-
     /// A `String` array describing the possible causes of the error.
     /// - note: Defaults to an empty array.
     /// Provide a custom implementation to give more context.
@@ -100,11 +96,6 @@ extension DebuggableError {
     }
 
     public var source: ErrorSource? {
-        nil
-    }
-
-    @available(*, deprecated, message: "Captured stack traces are no longer supported by Vapor")
-    public var stackTrace: StackTrace? {
         nil
     }
 

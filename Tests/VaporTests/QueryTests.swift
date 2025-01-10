@@ -5,10 +5,18 @@ import NIOCore
 import NIOHTTP1
 
 final class QueryTests: XCTestCase {
+    
+    var app: Application!
+    
+    override func setUp() async throws {
+        self.app = await Application(.testing)
+    }
+    
+    override func tearDown() async throws {
+        try await self.app.shutdown()
+    }
+    
     func testQuery() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
         let request = Request(application: app, on: app.eventLoopGroup.next())
         request.headers.contentType = .json
         request.url.path = "/foo"
@@ -17,9 +25,6 @@ final class QueryTests: XCTestCase {
     }
 
     func testQueryAsArray() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
         let request = Request(application: app, on: app.eventLoopGroup.next())
         request.headers.contentType = .json
         request.url.path = "/foo"
@@ -30,9 +35,6 @@ final class QueryTests: XCTestCase {
 
     // https://github.com/vapor/vapor/pull/2163
     func testWrappedSingleValueQueryDecoding() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
         let request = Request(application: app, on: app.eventLoopGroup.next())
         request.headers.contentType = .json
         request.url.path = "/foo"
@@ -52,9 +54,6 @@ final class QueryTests: XCTestCase {
     }
 
     func testNotCrashingArrayWithPercentEncoding() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
         let request = Request(application: app, on: app.eventLoopGroup.next())
         request.headers.contentType = .json
         request.url.path = "/"
@@ -63,14 +62,8 @@ final class QueryTests: XCTestCase {
         XCTAssertEqual(parsed, ["xyz"])
     }
 
-    func testQueryGet() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
-        var req: Request
-
-        //
-        req = Request(
+    func testQueryGet() async throws {
+        var req = Request(
             application: app,
             method: .GET,
             url: .init(string: "/path?foo=a"),
@@ -114,21 +107,18 @@ final class QueryTests: XCTestCase {
     }
 
     // https://github.com/vapor/vapor/issues/1537
-    func testQueryStringRunning() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
+    func testQueryStringRunning() async throws {
         app.routes.get("todos") { req in
             return "hi"
         }
 
-        try app.testable().test(.GET, "/todos?a=b") { res in
+        try await app.testable().test(.GET, "/todos?a=b") { res in
             XCTAssertEqual(res.status, .ok)
             XCTAssertEqual(res.body.string, "hi")
         }
     }
 
-    func testURLEncodedFormDecodeQuery() throws {
+    func testURLEncodedFormDecodeQuery() async throws {
         struct User: Content {
             var name: String
             var age: Int
@@ -140,9 +130,6 @@ final class QueryTests: XCTestCase {
             var name: String
             var age: Int
         }
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
 
         app.get("urlencodedform") { req -> HTTPStatus in
             let foo = try req.query.decode(User.self)
@@ -155,12 +142,12 @@ final class QueryTests: XCTestCase {
         }
 
         let data = "name=Vapor&age=3&luckyNumbers[]=5&luckyNumbers[]=7&pet[name]=Fido&pet[age]=3"
-        try app.testable().test(.GET, "/urlencodedform?\(data)") { res in
+        try await app.testable().test(.GET, "/urlencodedform?\(data)") { res in
             XCTAssertEqual(res.status.code, 200)
         }
     }
 
-    func testURLPercentEncodedFormDecodeQuery() throws {
+    func testURLPercentEncodedFormDecodeQuery() async throws {
         struct User: Content {
             var name: String
             var age: Int
@@ -173,9 +160,6 @@ final class QueryTests: XCTestCase {
             var age: Int
         }
 
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
         app.get("urlencodedform") { req -> HTTPStatus in
             let foo = try req.query.decode(User.self)
             XCTAssertEqual(foo.name, "Vapor")
@@ -187,15 +171,12 @@ final class QueryTests: XCTestCase {
         }
 
         let data = "name=Vapor&age=3&luckyNumbers[]=5&luckyNumbers[]=7&pet[name]=Fido&pet[age]=3".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        try app.testable().test(.GET, "/urlencodedform?\(data)") { res in
+        try await app.testable().test(.GET, "/urlencodedform?\(data)") { res in
             XCTAssertEqual(res.status.code, 200)
         }
     }
 
-    func testCustomEncode() throws {
-        let app = Application(.testing)
-        defer { app.shutdown() }
-
+    func testCustomEncode() async throws {
         app.get("custom-encode") { req -> Response in
             let res = Response(status: .ok)
             let jsonEncoder = JSONEncoder()
@@ -204,7 +185,7 @@ final class QueryTests: XCTestCase {
             return res
         }
 
-        try app.testable().test(.GET, "/custom-encode") { res in
+        try await app.testable().test(.GET, "/custom-encode") { res in
             XCTAssertEqual(res.body.string, """
             {
               "hello" : "world"
@@ -214,14 +195,11 @@ final class QueryTests: XCTestCase {
     }
 
     // https://github.com/vapor/vapor/issues/1609
-    func testGH1609() throws {
+    func testGH1609() async throws {
         struct DecodeFail: Content {
             var here: String
             var missing: String
         }
-
-        let app = Application(.testing)
-        defer { app.shutdown() }
 
         app.post("decode-fail") { req -> String in
             _ = try req.content.decode(DecodeFail.self)
@@ -234,7 +212,7 @@ final class QueryTests: XCTestCase {
         headers.replaceOrAdd(name: .contentLength, value: body.readableBytes.description)
         headers.contentType = .json
 
-        try app.testable().test(.POST, "/decode-fail", headers: headers, body: body) { res in
+        try await app.testable().test(.POST, "/decode-fail", headers: headers, body: body) { res in
             XCTAssertEqual(res.status, .badRequest)
             XCTAssertContains(res.body.string, "missing")
         }
@@ -242,9 +220,6 @@ final class QueryTests: XCTestCase {
 
     // https://github.com/vapor/vapor/issues/1687
     func testRequestQueryStringPercentEncoding() throws {
-        let app = Application()
-        defer { app.shutdown() }
-
         struct TestQueryStringContainer: Content {
             var name: String
         }
@@ -277,8 +252,6 @@ final class QueryTests: XCTestCase {
     }
 
     func testOptionalGet() throws {
-        let app = Application()
-        defer { app.shutdown() }
         let req = Request(
             application: app,
             method: .GET,
@@ -302,8 +275,6 @@ final class QueryTests: XCTestCase {
     }
 
     func testValuelessParamGet() throws {
-        let app = Application()
-        defer { app.shutdown() }
         let req = Request(
             application: app,
             method: .GET,
@@ -339,13 +310,12 @@ final class QueryTests: XCTestCase {
         XCTAssertNil(try req.query.decode(OptionalBarStruct.self).bar)
     }
     
-    func testNotCrashingWhenUnkeyedContainerIsAtEnd() {
+    func testNotCrashingWhenUnkeyedContainerIsAtEnd() async throws {
         struct Query: Decodable {
             let closedRange: ClosedRange<Double>
         }
         
-        let app = Application()
-        defer { app.shutdown() }
+        let app = await Application()
         
         let request = Request(application: app, on: app.eventLoopGroup.next())
         request.headers.contentType = .json
@@ -359,5 +329,7 @@ final class QueryTests: XCTestCase {
                 XCTFail("Caught error \"\(error)\", but not the expected: \"DecodingError.valueNotFound\"")
             }
         }
+        
+        try await app.shutdown()
     }
 }

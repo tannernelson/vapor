@@ -1,8 +1,4 @@
-#if !canImport(Darwin) && compiler(<6.0)
-@preconcurrency import struct Foundation.URLComponents
-#else
-import struct Foundation.URLComponents
-#endif
+import Foundation
 
 // MARK: - URI
 
@@ -129,16 +125,7 @@ public struct URI: CustomStringConvertible, ExpressibleByStringInterpolation, Ha
                         components.percentEncodedPassword = creds[1].addingPercentEncoding(withAllowedCharacters: .urlPasswordAllowed)
                     }
                 }
-                // TODO: Use the `encodedHost` polyfill
-                #if canImport(Darwin)
-                if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-                    components.encodedHost = host.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-                } else {
-                    components.percentEncodedHost = host.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-                }
-                #else
-                components.percentEncodedHost = host.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-                #endif
+                components.encodedHost = host.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
                 components.port = port
             } else {
                 // TODO: Should this be enforced?

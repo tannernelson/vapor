@@ -5,7 +5,7 @@ import _NIOFileSystem
 /// Serves static files from a public directory.
 ///
 /// `FileMiddleware` will default to `DirectoryConfig`'s working directory with `"/Public"` appended.
-public final class FileMiddleware: AsyncMiddleware {
+public final class FileMiddleware: Middleware {
     /// The public directory. Guaranteed to end with a slash.
     private let publicDirectory: String
     private let defaultFile: String?
@@ -48,7 +48,7 @@ public final class FileMiddleware: AsyncMiddleware {
         self.advancedETagComparison = advancedETagComparison
     }
     
-    public func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
+    public func respond(to request: Request, chainingTo next: any Responder) async throws -> Response {
         // make a copy of the percent-decoded path
         guard var path = request.url.path.removingPercentEncoding else {
             throw Abort(.badRequest)
@@ -80,7 +80,7 @@ public final class FileMiddleware: AsyncMiddleware {
                         
                         if try await FileSystem.shared.info(forFileAt: .init(absPath)) != nil {
                             // If the default file exists, stream it
-                            return try await request.fileio.asyncStreamFile(at: absPath, advancedETagComparison: advancedETagComparison)
+                            return try await request.fileio.streamFile(at: absPath, advancedETagComparison: advancedETagComparison)
                         }
                     }
                 } else {
@@ -92,7 +92,7 @@ public final class FileMiddleware: AsyncMiddleware {
                 }
             } else {
                 // file exists, stream it
-                return try await request.fileio.asyncStreamFile(at: absPath, advancedETagComparison: advancedETagComparison)
+                return try await request.fileio.streamFile(at: absPath, advancedETagComparison: advancedETagComparison)
             }
         }
         

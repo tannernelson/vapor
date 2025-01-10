@@ -1,16 +1,24 @@
 import NIOConcurrencyHelpers
 
 /// Singleton service cache for a `Session`. Used with a message's private container.
-internal final class SessionCache: Sendable {
+internal actor SessionCache: Sendable {
     /// Set to `true` when passing through middleware.
-    let middlewareFlag: NIOLockedValueBox<Bool>
+    var middlewareFlag: Bool
 
     /// The cached session.
-    let session: NIOLockedValueBox<Session?>
+    var session: Session?
 
     /// Creates a new `SessionCache`.
     init(session: Session? = nil) {
-        self.session = .init(session)
-        self.middlewareFlag = .init(false)
+        self.session = session
+        self.middlewareFlag = false
+    }
+    
+    func setSession(_ session: Session) {
+        self.session = session
+    }
+    
+    func setMiddlewareFlag() {
+        self.middlewareFlag = true
     }
 }

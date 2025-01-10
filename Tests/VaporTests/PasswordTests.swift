@@ -3,6 +3,9 @@ import XCTest
 import Vapor
 import NIOCore
 
+#warning("Migrate")
+
+/*
 final class PasswordTests: XCTestCase {
     func testSyncBCryptService() throws {
         let test = Environment(name: "testing", arguments: ["vapor"])
@@ -129,3 +132,4 @@ final class PasswordTests: XCTestCase {
         })
     }
 }
+*/

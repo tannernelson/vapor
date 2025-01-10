@@ -1,3 +1,5 @@
+import NIOHTTP1
+
 /// Overrides the response compression settings for a route.
 ///
 /// This is useful when a set of static routes does not need compression, or a set of dynamic routes does.
@@ -7,7 +9,7 @@
 /// To ignore a preference a downstream middleware (ie. closer to the root route than to the original response) may propose in favor of the server defaults, use ``HTTPHeaders/ResponseCompression/useDefault``.
 ///
 /// - Note: Response compression is only actually used if the client indicates it supports it via an `Accept` header.
-public struct ResponseCompressionMiddleware: AsyncMiddleware {
+public struct ResponseCompressionMiddleware: Middleware {
     /// The response compression override to use over the base configuration.
     ///
     /// Overrides are only used when the server's ``HTTPServer/Configuration-swift.struct/ResponseCompressionConfiguration/allowRequestOverrides`` property is enabled, otherwise they are ignored.
@@ -32,7 +34,7 @@ public struct ResponseCompressionMiddleware: AsyncMiddleware {
         self.shouldForce = shouldForce
     }
     
-    public func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
+    public func respond(to request: Request, chainingTo next: any Responder) async throws -> Response {
         let response = try await next.respond(to: request)
         /// Only set the header if it is unset, and prefer the next responder's header over our own override, as _it_ is overriding ours.
         if response.headers.responseCompression == .unset || shouldForce {

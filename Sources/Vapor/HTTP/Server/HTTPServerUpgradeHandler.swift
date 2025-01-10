@@ -131,7 +131,6 @@ private final class UpgradeBufferHandler: ChannelInboundHandler, RemovableChanne
 }
 
 /// Conformance for any struct that performs an HTTP Upgrade
-@preconcurrency
 public protocol Upgrader: Sendable {
     func applyUpgrade(req: Request, res: Response) -> HTTPServerProtocolUpgrader
 }
@@ -139,10 +138,10 @@ public protocol Upgrader: Sendable {
 /// Handles upgrading an HTTP connection to a WebSocket
 public struct WebSocketUpgrader: Upgrader, Sendable {
     var maxFrameSize: WebSocketMaxFrameSize
-    var shouldUpgrade: (@Sendable () -> EventLoopFuture<HTTPHeaders?>)
+    var shouldUpgrade: (@Sendable () async throws -> HTTPHeaders?)
     var onUpgrade: @Sendable (WebSocket) -> ()
     
-    @preconcurrency public init(maxFrameSize: WebSocketMaxFrameSize, shouldUpgrade: @escaping (@Sendable () -> EventLoopFuture<HTTPHeaders?>), onUpgrade: @Sendable @escaping (WebSocket) -> ()) {
+    public init(maxFrameSize: WebSocketMaxFrameSize, shouldUpgrade: @escaping (@Sendable () async throws -> HTTPHeaders?), onUpgrade: @Sendable @escaping (WebSocket) -> ()) {
         self.maxFrameSize = maxFrameSize
         self.shouldUpgrade = shouldUpgrade
         self.onUpgrade = onUpgrade
@@ -150,7 +149,9 @@ public struct WebSocketUpgrader: Upgrader, Sendable {
     
     public func applyUpgrade(req: Request, res: Response) -> HTTPServerProtocolUpgrader {
         let webSocketUpgrader = NIOWebSocketServerUpgrader(maxFrameSize: self.maxFrameSize.value, automaticErrorHandling: false, shouldUpgrade: { _, _ in
-            return self.shouldUpgrade()
+            return req.eventLoop.makeFutureWithTask {
+                try await self.shouldUpgrade()
+            }
         }, upgradePipelineHandler: { channel, req in
             return WebSocket.server(on: channel, onUpgrade: self.onUpgrade)
         })

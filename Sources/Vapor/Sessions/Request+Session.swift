@@ -9,26 +9,28 @@ extension Request {
     /// - note: `SessionsMiddleware` must be added and enabled.
     /// - returns: `Session` for this `Request`.
     public var session: Session {
-        if !self._sessionCache.middlewareFlag.withLockedValue({ $0 }) {
-            // No `SessionsMiddleware` was detected on your app.
-            // Suggested solutions:
-            // - Add the `SessionsMiddleware` globally to your app using `app.middleware.use`
-            // - Add the `SessionsMiddleware` to a route group.
-            assertionFailure("No `SessionsMiddleware` detected.")
-        }
-        return self._sessionCache.session.withLockedValue { storedSession in
-            if let existing = storedSession {
+        get async {
+            if await !self._sessionCache.middlewareFlag {
+                // No `SessionsMiddleware` was detected on your app.
+                // Suggested solutions:
+                // - Add the `SessionsMiddleware` globally to your app using `app.middleware.use`
+                // - Add the `SessionsMiddleware` to a route group.
+                assertionFailure("No `SessionsMiddleware` detected.")
+            }
+            if let existing = await self._sessionCache.session {
                 return existing
             } else {
                 let new = Session()
-                storedSession = new
+                await self._sessionCache.setSession(new)
                 return new
             }
         }
     }
     
     public var hasSession: Bool {
-        return self._sessionCache.session.withLockedValue { $0 != nil }
+        get async {
+            await self._sessionCache.session != nil
+        }
     }
 
     private struct SessionCacheKey: StorageKey {
@@ -40,7 +42,7 @@ extension Request {
             return existing
         } else {
             let new = SessionCache()
-            self.storage[SessionCacheKey.self] = new
+            self.storage.setFirstTime(SessionCacheKey.self, to: new)
             return new
         }
     }

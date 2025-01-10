@@ -22,7 +22,7 @@ extension Application {
 
             let run: @Sendable (Application) -> ()
 
-            @preconcurrency public init(_ run: @Sendable @escaping (Application) -> ()) {
+            public init(_ run: @Sendable @escaping (Application) -> ()) {
                 self.run = run
             }
         }
@@ -45,10 +45,8 @@ extension Application {
 
         public var plaintext: PlaintextRenderer {
             return .init(
-                fileio: self.application.fileio,
                 viewsDirectory: self.application.directory.viewsDirectory,
-                logger: self.application.logger,
-                eventLoopGroup: self.application.eventLoopGroup
+                logger: self.application.logger
             )
         }
 
@@ -56,12 +54,12 @@ extension Application {
             provider.run(self.application)
         }
 
-        @preconcurrency public func use(_ makeRenderer: @Sendable @escaping (Application) -> (ViewRenderer)) {
+        public func use(_ makeRenderer: @Sendable @escaping (Application) -> (ViewRenderer)) {
             self.storage.makeRenderer.withLockedValue { $0 = .init(factory: makeRenderer) }
         }
 
-        func initialize() {
-            self.application.storage[Key.self] = .init()
+        func initialize() async {
+            await self.application.storage.set(Key.self, to: .init())
             self.use(.plaintext)
         }
 

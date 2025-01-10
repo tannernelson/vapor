@@ -6,12 +6,12 @@ import ConsoleKit
 ///     Done.
 ///
 public final class BootCommand: AsyncCommand {
-    // See `AsyncCommand`.
+    // See `Command`.
     public struct Signature: CommandSignature {
         public init() { }
     }
 
-    // See `AsyncCommand`.
+    // See `Command`.
     public var help: String {
         return "Boots the application's providers."
     }
@@ -19,7 +19,7 @@ public final class BootCommand: AsyncCommand {
     /// Create a new `BootCommand`.
     public init() { }
 
-    // See `AsyncCommand`.
+    // See `Command`.
     public func run(using context: ConsoleKitCommands.CommandContext, signature: Signature) async throws {
         context.console.success("Done.")
     }

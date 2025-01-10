@@ -1,22 +1,15 @@
 import Foundation
 
-extension Application.Passwords.Provider {
-    public static var bcrypt: Self {
-        .bcrypt(cost: 12)
+public struct BcryptHasher: PasswordHasher {
+    let cost: Int
+    
+    public init(cost: Int) {
+        self.cost = cost
     }
     
-    public static func bcrypt(cost: Int) -> Self {
-        .init {
-            $0.passwords.use { _ in
-                BcryptHasher(cost: cost)
-            }
-        }
-    }
-}
-
-struct BcryptHasher: PasswordHasher {
-    let cost: Int
-    func hash<Password>(
+#warning("Run this on a thread pool or something")
+    
+    public func hash<Password>(
         _ password: Password
     ) throws -> [UInt8]
         where Password: DataProtocol
@@ -26,7 +19,7 @@ struct BcryptHasher: PasswordHasher {
         return .init(digest.utf8)
     }
 
-    func verify<Password, Digest>(
+    public func verify<Password, Digest>(
         _ password: Password,
         created digest: Digest
     ) throws -> Bool
