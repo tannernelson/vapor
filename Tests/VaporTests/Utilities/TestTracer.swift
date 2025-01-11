@@ -3,6 +3,7 @@ import Tracing
 final class TestTracer: Tracer {
     typealias Span = TestSpan
     
+    static let extractKey = "to-extract"
     var spans: [TestSpan] = []
     
     func startSpan(
@@ -27,6 +28,7 @@ final class TestTracer: Tracer {
     }
     
     func extract<Carrier, Extract>(_ carrier: Carrier, into context: inout ServiceContextModule.ServiceContext, using extractor: Extract) where Carrier == Extract.Carrier, Extract : Instrumentation.Extractor {
+        context.extracted = extractor.extract(key: Self.extractKey, from: carrier)
         return
     }
     
@@ -72,3 +74,17 @@ final class TestSpan: Span {
 
 extension TestTracer: @unchecked Sendable {}
 extension TestSpan: @unchecked Sendable {}
+
+extension ServiceContext {
+    var extracted: String? {
+        get {
+            self[ExtractedKey.self]
+        } set {
+            self[ExtractedKey.self] = newValue
+        }
+    }
+    
+    private enum ExtractedKey: ServiceContextKey {
+        typealias Value = String
+    }
+}

@@ -159,12 +159,16 @@ final class MiddlewareTests: XCTestCase {
         }
         
         app.grouped(
-            TracingMiddleware()
+            TracingMiddleware() { attributes, _ in
+                attributes["custom"] = "custom"
+            }
         ).grouped(
             TestServiceContextMiddleware()
         ).get("testTracing") { req -> String in
             // Validates that TracingMiddleware sets the serviceContext
             XCTAssertNotNil(req.serviceContext)
+            // Validates that TracingMiddleware exposes header extraction to backend
+            XCTAssertEqual(req.serviceContext.extracted, "extracted")
             // Validates that the span's service context is propagated into the
             // Task.local storage of the responder closure, thereby ensuring that
             // spans created in the closure are nested under the request span.
@@ -176,10 +180,11 @@ final class MiddlewareTests: XCTestCase {
         try await app.testable(method: .running(hostname: "127.0.0.1", port: 8080)).test(
             .GET,
             "/testTracing?foo=bar",
-            beforeRequest: { request in
+            beforeRequest: { request async in
                 request.headers.add(name: HTTPHeaders.Name.userAgent.description, value: "test")
+                request.headers.add(name: TestTracer.extractKey, value: "extracted")
             },
-            afterResponse: { response in
+            afterResponse: { response async in
                 XCTAssertEqual(response.status, .ok)
                 XCTAssertEqual(response.body.string, "done")
             }
@@ -203,6 +208,8 @@ final class MiddlewareTests: XCTestCase {
         XCTAssertNotNil(span.attributes["network.peer.port"]?.toSpanAttribute())
         XCTAssertEqual(span.attributes["network.protocol.version"]?.toSpanAttribute(), "1.1")
         XCTAssertEqual(span.attributes["user_agent.original"]?.toSpanAttribute(), "test")
+        
+        XCTAssertEqual(span.attributes["custom"]?.toSpanAttribute(), "custom")
         
         XCTAssertEqual(span.attributes["http.response.status_code"]?.toSpanAttribute(), 200)
     }

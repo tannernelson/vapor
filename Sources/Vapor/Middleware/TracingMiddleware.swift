@@ -4,10 +4,26 @@ import Tracing
 ///
 /// See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
 public final class TracingMiddleware: AsyncMiddleware {
-    public init() {}
+    private let setCustomAttributes: @Sendable (inout SpanAttributes, Request) -> Void
+    
+    /// Create a TracingMiddleware
+    public init() {
+        self.setCustomAttributes = { _, _ in }
+    }
+    
+    /// Create a TracingMiddleware
+    /// - Parameter setCustomAttributes: Closure that allows setting custom span attributes for a particular request. A custom span attribute could be extracted from a request
+    /// header, for example. This closure is called during span creation on every request, so should be lightweight.
+    public init(
+        setCustomAttributes: @escaping @Sendable (inout SpanAttributes, Request) -> Void
+    ) {
+        self.setCustomAttributes = setCustomAttributes
+    }
     
     public func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
-        let parentContext = request.serviceContext
+        var parentContext = request.serviceContext
+        InstrumentationSystem.instrument.extract(request.headers, into: &parentContext, using: HTTPHeadersExtractor())
+        
         return try await withSpan(
             // Name: https://opentelemetry.io/docs/specs/semconv/http/http-spans/#name
             request.route?.description ?? "vapor_route_undefined",
@@ -49,6 +65,9 @@ public final class TracingMiddleware: AsyncMiddleware {
                 attributes["network.peer.port"] = request.remoteAddress?.port
                 attributes["network.protocol.version"] = "\(request.version.major).\(request.version.minor)"
                 attributes["user_agent.original"] = request.headers[.userAgent].first
+                
+                // Custom defined
+                setCustomAttributes(&attributes, request)
             }
             let response = try await next.respond(to: request)
             
@@ -63,6 +82,20 @@ public final class TracingMiddleware: AsyncMiddleware {
             }
             
             return response
+        }
+    }
+}
+
+// Allows backends to extract information from the request headers. For example, in OTel W3C, this allows frontend/backend
+// correlation using the `traceparent` and `tracestate` headers. For more information, see
+// https://swiftpackageindex.com/apple/swift-distributed-tracing/main/documentation/tracing/instrumentyourlibrary#Handling-inbound-requests
+private struct HTTPHeadersExtractor: Extractor {
+    func extract(key name: String, from headers: HTTPHeaders) -> String? {
+        let headerValue = headers[name]
+        if headerValue.isEmpty {
+            return nil
+        } else {
+            return headerValue.joined(separator: ";")
         }
     }
 }
